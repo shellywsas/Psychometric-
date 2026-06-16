@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PsychoMaster | ניהול פסיכומטרי חכם</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap');
+        
+        body { font-family: 'Heebo', sans-serif; background-color: #fafafa; -webkit-tap-highlight-color: transparent; }
+
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; direction: ltr; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #18181b; cursor: pointer; margin-top: -8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border: 2px solid white; transition: transform 0.1s; }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #e4e4e7; border-radius: 10px; }
+        
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }
+        
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider-toggle { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #e4e4e7; transition: .3s; border-radius: 34px; }
+        .slider-toggle:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        input:checked + .slider-toggle { background-color: #18181b; }
+        input:checked + .slider-toggle:before { transform: translateX(20px); }
+
+        .img-preview { max-height: 150px; border-radius: 0.75rem; object-fit: cover; cursor: pointer; transition: transform 0.2s; border: 1px solid #e4e4e7; }
+        .img-preview:hover { transform: scale(1.02); }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    </style>
+</head>
+<body class="text-zinc-900 selection:bg-zinc-200 h-screen overflow-hidden flex flex-col md:flex-row antialiased">
+
+    <!-- Login -->
+    <div id="login-container" class="w-full h-full flex items-center justify-center bg-zinc-50 z-50 fixed inset-0"></div>
+    
+    <!-- Sidebar -->
+    <aside id="sidebar-container" class="bg-zinc-950 text-zinc-400 w-full md:w-64 shrink-0 flex flex-col md:h-full sticky top-0 z-40 transition-all hidden border-l border-zinc-900"></aside>
+    
+    <!-- Main Content -->
+    <main id="app" class="flex-1 overflow-y-auto hidden bg-[#fafafa] relative">
+        <div class="max-w-7xl mx-auto p-4 md:p-8 pb-24" id="main-content"></div>
+    </main>
+
+    <!-- Modals -->
+    <!-- Alert Modal -->
+    <div id="alert-modal" class="fixed inset-0 z-[120] bg-zinc-900/40 backdrop-blur-sm hidden items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl transform scale-95 transition-transform duration-300" id="alert-modal-box">
+            <div id="alert-icon" class="w-16 h-16 rounded-full bg-zinc-100 text-zinc-900 flex items-center justify-center mx-auto mb-5"></div>
+            <h3 id="alert-title" class="text-xl font-bold text-center text-zinc-900 mb-2"></h3>
+            <p id="alert-message" class="text-zinc-500 text-center mb-8 leading-relaxed"></p>
+            <button onclick="closeAlert()" class="w-full py-3.5 bg-zinc-900 text-white rounded-xl font-medium hover:bg-zinc-800 transition shadow-md">אישור, הבנתי</button>
+        </div>
+    </div>
+
+    <!-- Task Modal -->
+    <div id="task-modal" class="fixed inset-0 z-[100] bg-zinc-900/40 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl border border-zinc-200/50">
+            <div class="flex justify-between items-center mb-6">
+                <h3 id="task-modal-title" class="text-2xl font-bold text-zinc-900 tracking-tight">משימה חדשה</h3>
+                <button onclick="closeTaskModal()" class="text-zinc-400 hover:text-zinc-900 transition"><i data-lucide="x" class="w-6 h-6"></i></button>
+            </div>
+            <form onsubmit="handleTaskSubmit(event)" class="space-y-5">
+                <div>
+                    <label class="block text-sm font-semibold text-zinc-700 mb-1.5">כותרת המשימה</label>
+                    <input type="text" id="task-title" required class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 focus:outline-none focus:border-zinc-900 transition" placeholder="למשל: מקבץ אנגלית, שינון מילים...">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-zinc-700 mb-1.5">תיאור ופירוט (אופציונלי)</label>
+                    <textarea id="task-desc" rows="3" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 focus:outline-none focus:border-zinc-900 transition resize-none" placeholder="הערות, עמודים בספר, דגשים..."></textarea>
+                </div>
+                
+                <div class="bg-zinc-50 p-4 rounded-xl border border-zinc-100 space-y-4">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <div class="switch">
+                            <input type="checkbox" id="task-is-recurring" onchange="toggleTaskRecurrence()">
+                            <span class="slider-toggle"></span>
+                        </div>
+                        <span class="text-sm font-semibold text-zinc-700">משימה שבועית קבועה?</span>
+                    </label>
+
+                    <div id="task-onetime-fields" class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-zinc-500 mb-1 uppercase tracking-wider">תאריך</label>
+                            <input type="date" id="task-date" class="w-full bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-900 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-zinc-500 mb-1 uppercase tracking-wider">שעה</label>
+                            <input type="time" id="task-time" class="w-full bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-900 font-mono">
+                        </div>
+                    </div>
+
+                    <div id="task-recurring-fields" class="hidden">
+                        <label class="block text-xs font-semibold text-zinc-500 mb-1 uppercase tracking-wider">יום בשבוע ושעה</label>
+                        <div class="flex gap-2">
+                            <select id="task-recurring-day" class="flex-1 bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-900">
+                                <option value="0">יום ראשון</option><option value="1">יום שני</option><option value="2">יום שלישי</option><option value="3">יום רביעי</option><option value="4">יום חמישי</option><option value="5">יום שישי</option><option value="6">שבת</option>
+                            </select>
+                            <input type="time" id="task-recurring-time" class="w-24 bg-white border border-zinc-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:border-zinc-900 font-mono">
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-zinc-700 mb-1.5 flex justify-between items-center">
+                        <span>טיימר למידה אישי (בדקות)</span>
+                        <span class="text-xs font-normal text-zinc-400">אופציונלי</span>
+                    </label>
+                    <input type="number" id="task-duration" min="1" max="300" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 focus:outline-none focus:border-zinc-900 transition font-mono" placeholder="למשל: 30">
+                </div>
+
+                <button type="submit" id="task-submit-btn" class="w-full py-4 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 transition-colors shadow-md mt-4">שמור משימה</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Custom Event Modal (Calendar) -->
+    <div id="event-modal" class="fixed inset-0 z-[100] bg-zinc-900/40 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-zinc-900">אירוע חדש ליומן</h3>
+                <button onclick="closeEventModal()" class="text-zinc-400 hover:text-zinc-900"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form onsubmit="handleEventSubmit(event)" class="space-y-4">
+                <input type="date" id="event-date" required class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:border-zinc-900 font-mono">
+                <input type="text" id="event-title" required placeholder="שם האירוע (למשל: מבחן אמצע)" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:border-zinc-900">
+                <input type="time" id="event-time" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:border-zinc-900 font-mono">
+                <button type="submit" class="w-full py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 transition">שמור אירוע</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Message Send Modal -->
+    <div id="admin-message-modal" class="fixed inset-0 z-[110] bg-zinc-900/40 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <h3 class="text-xl font-bold text-zinc-900 mb-2">שליחת הודעה לתלמיד</h3>
+            <p id="admin-message-target" class="text-sm text-zinc-500 mb-4"></p>
+            <textarea id="admin-message-text" rows="4" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 focus:outline-none focus:border-zinc-900 resize-none mb-4" placeholder="הקלד את הודעתך כאן..."></textarea>
+            <div class="flex gap-3">
+                <button onclick="sendAdminMessage()" class="flex-1 py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 transition">שלח</button>
+                <button onclick="closeAdminMessageModal()" class="flex-1 py-3 bg-zinc-100 text-zinc-900 rounded-xl font-bold hover:bg-zinc-200 transition">ביטול</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin View User Modal -->
+    <div id="admin-view-modal" class="fixed inset-0 z-[105] bg-zinc-900/40 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-[2rem] p-8 max-w-2xl w-full shadow-2xl max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center mb-6 border-b border-zinc-100 pb-4">
+                <div>
+                    <h3 id="view-user-name" class="text-2xl font-bold text-zinc-900 tracking-tight">תיק תלמיד</h3>
+                    <div class="text-sm text-zinc-500 mt-1" id="view-user-login"></div>
+                </div>
+                <button onclick="closeAdminViewModal()" class="text-zinc-400 hover:text-zinc-900 transition"><i data-lucide="x" class="w-6 h-6"></i></button>
+            </div>
+            <div id="admin-view-content" class="flex-1 overflow-y-auto pr-2 space-y-6"></div>
+        </div>
+    </div>
+
+    <script>
+        // מניעת רענון בטעות
+        window.addEventListener('beforeunload', function (e) {
+            if (state.view !== 'login') {
+                e.preventDefault();
+                e.returnValue = ''; // הדפדפן מציג הודעת אזהרה דיפולטיבית
+            }
+        });
+
+        const USER_STATS_TEMPLATE = {
+            name: "", password: "", examDate: null,
+            messages: [], // Inbox from admin
+            sentMessages: [], // Outbox to admin
+            courseSettings: { isTakingCourse: false, weeklyClasses: [] },
+            todos: [], 
+            calendarEvents: [], 
+            simulations: [], 
+            customDictionary: { words: [], images: [] }
+        };
+
+        const state = {
+            view: 'login', profile: null, isAdmin: false,
+            calc: { quant: 100, verbal: 100, english: 100 },
+            dict: { practiceMode: null, practiceQueue: [], currentPracticeIndex: 0, practiceScore: 0, showAnswer: false },
+            activeTaskTimer: { id: null, interval: null, timeLeft: 0, totalDuration: 0 },
+            simTimer: { interval: null, timeLeft: 20 * 60, isRunning: false, isFullscreen: false },
+            pomodoro: { interval: null, timeLeft: 25 * 60, isRunning: false, mode: 'work' },
+            editingTaskId: null, editingClassId: null, targetUserForMessage: null,
+            calendarDate: new Date(),
+            pollingInterval: null
+        };
+
+        const calculatePsychoScore = (q, v, e) => {
+            const raw = (w_q, w_v, w_e) => Math.min(800, Math.max(200, Math.round((((q * w_q) + (v * w_v) + (e * w_e) - 50) * 6) + 200)));
+            return { multi: raw(0.4, 0.4, 0.2), quantE: raw(0.6, 0.2, 0.2), verbalE: raw(0.2, 0.6, 0.2) };
+        };
+
+        window.resizeImage = (file, callback) => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 800; const MAX_HEIGHT = 800;
+                    let width = img.width; let height = img.height;
+                    if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
+                    else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
+                    canvas.width = width; canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    callback(canvas.toDataURL('image/jpeg', 0.6));
+                }
+                img.src = e.target.result;
+            }
+            reader.readAsDataURL(file);
+        };
+
+        function showAlert(title, message, iconName = 'info') {
+            document.getElementById('alert-title').textContent = title;
+            document.getElementById('alert-message').textContent = message;
+            document.getElementById('alert-icon').innerHTML = `<i data-lucide="${iconName}" class="w-8 h-8 text-zinc-900"></i>`;
+            const modal = document.getElementById('alert-modal'); const box = document.getElementById('alert-modal-box');
+            modal.classList.remove('hidden'); modal.classList.add('flex');
+            requestAnimationFrame(() => { modal.classList.remove('opacity-0'); box.classList.remove('scale-95'); });
+            lucide.createIcons();
+        }
+
+        function closeAlert() {
+            const modal = document.getElementById('alert-modal'); const box = document.getElementById('alert-modal-box');
+            modal.classList.add('opacity-0'); box.classList.add('scale-95');
+            setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
+        }
+
+        function startPolling() {
+            if (state.pollingInterval) clearInterval(state.pollingInterval);
+            state.pollingInterval = setInterval(() => {
+                if (state.view === 'messages' || state.view === 'admin_dashboard') {
+                    const usersDB = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]');
+                    
+                    if (state.isAdmin && state.view === 'admin_dashboard') {
+                        const container = document.getElementById('admin-incoming-messages-container');
+                        if (container) container.innerHTML = generateAdminIncomingMessagesHTML(usersDB);
+                    } 
+                    else if (!state.isAdmin && state.view === 'messages') {
+                        const freshMe = usersDB.find(u => u.name === state.profile.name);
+                        if (freshMe) {
+                            state.profile.messages = freshMe.messages || [];
+                            saveProfile(state.profile, true); // silent save
+                            const inboxContainer = document.getElementById('student-inbox-list');
+                            if (inboxContainer) inboxContainer.innerHTML = generateStudentInboxHTML(state.profile.messages);
+                        }
+                    }
+                }
+            }, 2000);
+        }
+
+        function initAuth() {
+            if (!localStorage.getItem('psychoProUsersDB')) localStorage.setItem('psychoProUsersDB', JSON.stringify([]));
+            const savedSession = localStorage.getItem('psychoProPremiumSession');
+            if (savedSession) {
+                try {
+                    const session = JSON.parse(savedSession);
+                    if (session.isAdmin) { state.isAdmin = true; state.view = 'admin_dashboard'; } 
+                    else {
+                        state.profile = { ...USER_STATS_TEMPLATE, ...session, 
+                            customDictionary: session.customDictionary || USER_STATS_TEMPLATE.customDictionary,
+                            calendarEvents: session.calendarEvents || [], sentMessages: session.sentMessages || []
+                        };
+                        state.view = 'dashboard';
+                    }
+                    startPolling();
+                } catch(e) { state.profile = JSON.parse(JSON.stringify(USER_STATS_TEMPLATE)); }
+            } else { state.profile = JSON.parse(JSON.stringify(USER_STATS_TEMPLATE)); }
+            render();
+        }
+
+        window.saveProfile = (updatedProfile, silent = false) => {
+            state.profile = updatedProfile;
+            localStorage.setItem('psychoProPremiumSession', JSON.stringify(updatedProfile));
+            let usersDB = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]');
+            const userIndex = usersDB.findIndex(u => u.name === updatedProfile.name);
+            if (userIndex > -1) {
+                usersDB[userIndex] = { ...usersDB[userIndex], ...updatedProfile };
+                localStorage.setItem('psychoProUsersDB', JSON.stringify(usersDB));
+            }
+        };
+
+        window.switchView = (viewName) => {
+            if (viewName !== 'tasks' && state.activeTaskTimer.interval) stopTaskTimer();
+            if (viewName !== 'simulations' && state.simTimer.interval) stopSimTimer();
+            state.view = viewName; window.scrollTo(0, 0); render();
+        };
+
+        window.handleLogin = (event) => {
+            event.preventDefault();
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value;
+            const errorDiv = document.getElementById('login-error');
+            if (password.length < 4) { errorDiv.textContent = 'הסיסמה חייבת להכיל לפחות 4 תווים.'; errorDiv.classList.remove('hidden'); return; }
+            const now = new Date().toLocaleString('he-IL');
+
+            if (username === 'admin' && password === 'admin123') {
+                state.isAdmin = true; localStorage.setItem('psychoProPremiumSession', JSON.stringify({ isAdmin: true, name: 'מנהלת מערכת' }));
+                startPolling(); switchView('admin_dashboard'); return;
+            }
+
+            let usersDB = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]');
+            let existingUser = usersDB.find(u => u.name === username);
+
+            if (existingUser) {
+                if (existingUser.password !== password) { errorDiv.textContent = 'סיסמה שגויה למשתמש קיים.'; errorDiv.classList.remove('hidden'); return; }
+                existingUser.lastLogin = now;
+                localStorage.setItem('psychoProUsersDB', JSON.stringify(usersDB));
+                state.profile = { ...USER_STATS_TEMPLATE, ...existingUser, customDictionary: existingUser.customDictionary || USER_STATS_TEMPLATE.customDictionary, calendarEvents: existingUser.calendarEvents || [], sentMessages: existingUser.sentMessages || [] };
+            } else {
+                const newUser = JSON.parse(JSON.stringify(USER_STATS_TEMPLATE));
+                newUser.name = username; newUser.password = password; newUser.lastLogin = now; newUser.joinDate = now;
+                usersDB.push(newUser); localStorage.setItem('psychoProUsersDB', JSON.stringify(usersDB));
+                state.profile = newUser;
+            }
+
+            state.isAdmin = false; localStorage.setItem('psychoProPremiumSession', JSON.stringify(state.profile));
+            startPolling(); switchView('dashboard');
+        };
+
+        window.handleLogout = () => {
+            state.profile = JSON.parse(JSON.stringify(USER_STATS_TEMPLATE)); state.isAdmin = false;
+            if (state.pollingInterval) clearInterval(state.pollingInterval);
+            if (state.pomodoro.interval) clearInterval(state.pomodoro.interval);
+            localStorage.removeItem('psychoProPremiumSession'); switchView('login');
+        };
+
+        window.openTaskModal = (editId = null) => {
+            state.editingTaskId = editId;
+            document.getElementById('task-modal-title').textContent = editId ? 'עריכת משימה' : 'משימה חדשה';
+            document.getElementById('task-submit-btn').textContent = editId ? 'שמור שינויים' : 'שמור משימה';
+            
+            const modal = document.getElementById('task-modal');
+            modal.classList.remove('hidden'); modal.classList.add('flex');
+            
+            if(editId) {
+                const task = state.profile.todos.find(t => t.id === editId);
+                if(task) {
+                    document.getElementById('task-title').value = task.title; document.getElementById('task-desc').value = task.desc || '';
+                    document.getElementById('task-is-recurring').checked = task.isRecurring;
+                    document.getElementById('task-duration').value = task.duration || '';
+                    if(task.isRecurring) {
+                        document.getElementById('task-recurring-day').value = task.dayOfWeek;
+                        document.getElementById('task-recurring-time').value = task.time || '';
+                    } else {
+                        document.getElementById('task-date').value = task.date || '';
+                        document.getElementById('task-time').value = task.time || '';
+                    }
+                }
+            } else {
+                document.getElementById('task-title').value = ''; document.getElementById('task-desc').value = '';
+                document.getElementById('task-is-recurring').checked = false; document.getElementById('task-duration').value = '';
+                document.getElementById('task-date').value = ''; document.getElementById('task-time').value = '';
+            }
+            toggleTaskRecurrence();
+        };
+
+        window.closeTaskModal = () => { document.getElementById('task-modal').classList.add('hidden'); document.getElementById('task-modal').classList.remove('flex'); state.editingTaskId = null; };
+        window.toggleTaskRecurrence = () => {
+            const isRec = document.getElementById('task-is-recurring').checked;
+            document.getElementById('task-onetime-fields').classList.toggle('hidden', isRec); document.getElementById('task-recurring-fields').classList.toggle('hidden', !isRec);
+        };
+
+        window.handleTaskSubmit = (e) => {
+            e.preventDefault();
+            const title = document.getElementById('task-title').value.trim(); const desc = document.getElementById('task-desc').value.trim();
+            const isRecurring = document.getElementById('task-is-recurring').checked; const duration = parseInt(document.getElementById('task-duration').value) || null;
+            let date = null, time = null, dayOfWeek = null;
+            if (isRecurring) { dayOfWeek = parseInt(document.getElementById('task-recurring-day').value); time = document.getElementById('task-recurring-time').value; } 
+            else { date = document.getElementById('task-date').value; time = document.getElementById('task-time').value; }
+
+            if (title) {
+                const updatedProfile = { ...state.profile };
+                if (state.editingTaskId) {
+                    const idx = updatedProfile.todos.findIndex(t => t.id === state.editingTaskId);
+                    if(idx > -1) updatedProfile.todos[idx] = { ...updatedProfile.todos[idx], title, desc, isRecurring, duration, date, time, dayOfWeek };
+                } else {
+                    updatedProfile.todos.push({ id: Date.now(), title, desc, isRecurring, duration, date, time, dayOfWeek, done: false });
+                }
+                saveProfile(updatedProfile); closeTaskModal(); render();
+            }
+        };
+
+        window.toggleTodo = (id) => { const updatedProfile = { ...state.profile }; const todo = updatedProfile.todos.find(t => t.id === id); if (todo) { todo.done = !todo.done; saveProfile(updatedProfile); render(); } };
+        window.deleteTodo = (id) => { const updatedProfile = { ...state.profile }; updatedProfile.todos = updatedProfile.todos.filter(t => t.id !== id); saveProfile(updatedProfile); if (state.activeTaskTimer.id === id) stopTaskTimer(); render(); };
+
+        const formatTimeObj = (seconds) => { const m = Math.floor(seconds / 60); const s = seconds % 60; return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`; };
+
+        window.startTaskTimer = (id, durationMinutes) => {
+            if (state.activeTaskTimer.interval) clearInterval(state.activeTaskTimer.interval);
+            state.activeTaskTimer = { id: id, totalDuration: durationMinutes * 60, timeLeft: durationMinutes * 60, interval: setInterval(() => {
+                if (state.activeTaskTimer.timeLeft > 0) {
+                    state.activeTaskTimer.timeLeft--;
+                    const timerDisplay = document.getElementById(`timer-display-${id}`);
+                    if (timerDisplay) timerDisplay.textContent = formatTimeObj(state.activeTaskTimer.timeLeft);
+                } else { stopTaskTimer(); showAlert('סיום זמן', 'הזמן שהקצבת למשימה זו הסתיים. כל הכבוד!', 'check-circle'); }
+            }, 1000) }; render();
+        };
+        window.stopTaskTimer = () => { if (state.activeTaskTimer.interval) clearInterval(state.activeTaskTimer.interval); state.activeTaskTimer = { id: null, interval: null, timeLeft: 0, totalDuration: 0 }; render(); };
+
+        window.togglePomodoro = () => {
+            if (state.pomodoro.isRunning) {
+                clearInterval(state.pomodoro.interval); state.pomodoro.isRunning = false;
+            } else {
+                state.pomodoro.isRunning = true;
+                state.pomodoro.interval = setInterval(() => {
+                    if (state.pomodoro.timeLeft > 0) {
+                        state.pomodoro.timeLeft--;
+                        const display = document.getElementById('pomodoro-display');
+                        if (display) display.textContent = formatTimeObj(state.pomodoro.timeLeft);
+                    } else {
+                        if (state.pomodoro.mode === 'work') {
+                            state.pomodoro.mode = 'break'; state.pomodoro.timeLeft = 5 * 60; showAlert('זמן הפסקה!', 'עבדת מעולה. קח 5 דקות התרעננות.', 'coffee');
+                        } else {
+                            state.pomodoro.mode = 'work'; state.pomodoro.timeLeft = 25 * 60; showAlert('חזרה ללמידה!', 'ההפסקה נגמרה. זמן לפוקוס.', 'brain');
+                        }
+                        window.togglePomodoro(); // pause it automatically
+                    }
+                }, 1000);
+            }
+            render();
+        };
+        window.resetPomodoro = () => { if (state.pomodoro.interval) clearInterval(state.pomodoro.interval); state.pomodoro = { interval: null, timeLeft: 25 * 60, isRunning: false, mode: 'work' }; render(); };
+
+        window.toggleCourseStatus = (isTaking) => { const updatedProfile = { ...state.profile }; updatedProfile.courseSettings.isTakingCourse = isTaking; saveProfile(updatedProfile); render(); };
+        window.saveWeeklyClass = (e) => {
+            e.preventDefault();
+            const dayOfWeek = parseInt(document.getElementById('class-day').value); const startTime = document.getElementById('class-start-time').value; const endTime = document.getElementById('class-end-time').value; const isZoom = document.getElementById('class-zoom').checked;
+            if (startTime && endTime) {
+                if (startTime >= endTime) return showAlert('שגיאה בזמנים', 'שעת הסיום חייבת להיות אחרי שעת ההתחלה.', 'alert-circle');
+                const updatedProfile = { ...state.profile };
+                if (state.editingClassId) {
+                    const idx = updatedProfile.courseSettings.weeklyClasses.findIndex(c => c.id === state.editingClassId);
+                    if (idx > -1) updatedProfile.courseSettings.weeklyClasses[idx] = { id: state.editingClassId, dayOfWeek, startTime, endTime, isZoom };
+                    state.editingClassId = null;
+                } else {
+                    updatedProfile.courseSettings.weeklyClasses.push({ id: Date.now(), dayOfWeek, startTime, endTime, isZoom });
+                }
+                updatedProfile.courseSettings.weeklyClasses.sort((a,b) => a.dayOfWeek !== b.dayOfWeek ? a.dayOfWeek - b.dayOfWeek : a.startTime.localeCompare(b.startTime)); saveProfile(updatedProfile); render();
+            }
+        };
+        window.editWeeklyClass = (id) => {
+            const cls = state.profile.courseSettings.weeklyClasses.find(c => c.id === id);
+            if (cls) {
+                state.editingClassId = id; render();
+                setTimeout(() => {
+                    document.getElementById('class-day').value = cls.dayOfWeek; document.getElementById('class-start-time').value = cls.startTime;
+                    document.getElementById('class-end-time').value = cls.endTime || ''; document.getElementById('class-zoom').checked = cls.isZoom;
+                    document.getElementById('class-form-title').textContent = 'עריכת שיעור'; document.getElementById('class-form-btn').textContent = 'שמור שינויים';
+                }, 0);
+            }
+        };
+        window.cancelEditClass = () => { state.editingClassId = null; render(); };
+        window.deleteWeeklyClass = (id) => { const updatedProfile = { ...state.profile }; updatedProfile.courseSettings.weeklyClasses = updatedProfile.courseSettings.weeklyClasses.filter(c => c.id !== id); if (state.editingClassId === id) state.editingClassId = null; saveProfile(updatedProfile); render(); };
+
+        window.changeCalendarMonth = (offset) => { state.calendarDate.setMonth(state.calendarDate.getMonth() + offset); render(); };
+        window.openEventModal = (dateStr = null) => {
+            document.getElementById('event-modal').classList.remove('hidden'); document.getElementById('event-modal').classList.add('flex');
+            document.getElementById('event-title').value = ''; document.getElementById('event-time').value = ''; document.getElementById('event-date').value = dateStr || new Date().toISOString().split('T')[0];
+        };
+        window.closeEventModal = () => { document.getElementById('event-modal').classList.add('hidden'); document.getElementById('event-modal').classList.remove('flex'); };
+        window.handleEventSubmit = (e) => {
+            e.preventDefault();
+            const date = document.getElementById('event-date').value; const title = document.getElementById('event-title').value.trim(); const time = document.getElementById('event-time').value;
+            if(title && date) { const updatedProfile = { ...state.profile }; updatedProfile.calendarEvents.push({ id: Date.now(), date, title, time }); saveProfile(updatedProfile); closeEventModal(); render(); }
+        };
+        window.deleteEvent = (id) => { const updatedProfile = { ...state.profile }; updatedProfile.calendarEvents = updatedProfile.calendarEvents.filter(ev => ev.id !== id); saveProfile(updatedProfile); render(); };
+
+        window.toggleSimTimer = () => {
+            if (state.simTimer.isRunning) { clearInterval(state.simTimer.interval); state.simTimer.isRunning = false; state.simTimer.isFullscreen = false; } 
+            else {
+                state.simTimer.isRunning = true; state.simTimer.isFullscreen = true;
+                state.simTimer.interval = setInterval(() => {
+                    if (state.simTimer.timeLeft > 0) {
+                        state.simTimer.timeLeft--;
+                        const display = document.getElementById('sim-timer-display'); const displayFs = document.getElementById('sim-timer-display-fs');
+                        if (display) display.textContent = formatTimeObj(state.simTimer.timeLeft); if (displayFs) displayFs.textContent = formatTimeObj(state.simTimer.timeLeft);
+                    } else { window.toggleSimTimer(); showAlert('זמן נגמר', 'הזמן שהוקצב לסימולציה/פרק הסתיים!', 'clock'); }
+                }, 1000);
+            }
+            render();
+        };
+        window.resetSimTimer = () => {
+            if (state.simTimer.interval) clearInterval(state.simTimer.interval);
+            const mode = document.getElementById('sim-timer-mode') ? document.getElementById('sim-timer-mode').value : '20';
+            state.simTimer = { interval: null, timeLeft: parseInt(mode) * 60, isRunning: false, isFullscreen: false }; render();
+        };
+        window.stopSimTimer = () => { if (state.simTimer.interval) clearInterval(state.simTimer.interval); state.simTimer.isRunning = false; state.simTimer.isFullscreen = false; render();};
+
+        window.previewSimScores = () => {
+            const q = parseInt(document.getElementById('sim-score-quant').value) || 50; const v = parseInt(document.getElementById('sim-score-verbal').value) || 50; const e = parseInt(document.getElementById('sim-score-english').value) || 50;
+            const scores = calculatePsychoScore(q, v, e);
+            document.getElementById('sim-preview-multi').textContent = scores.multi; document.getElementById('sim-preview-quantE').textContent = scores.quantE; document.getElementById('sim-preview-verbalE').textContent = scores.verbalE;
+        };
+
+        window.saveSimulation = (e) => {
+            e.preventDefault();
+            const q = parseInt(document.getElementById('sim-score-quant').value) || 50; const v = parseInt(document.getElementById('sim-score-verbal').value) || 50; const eng = parseInt(document.getElementById('sim-score-english').value) || 50;
+            const newSim = {
+                id: Date.now(), date: document.getElementById('sim-date').value, name: document.getElementById('sim-name').value || 'סימולציה',
+                scores: { quant: q, verbal: v, english: eng }, finalScores: calculatePsychoScore(q, v, eng),
+                notes: { quant: document.getElementById('sim-notes-quant').value, verbal: document.getElementById('sim-notes-verbal').value, english: document.getElementById('sim-notes-english').value }, imageBase64: null
+            };
+            const finalizeSave = (simToSave) => { const updatedProfile = { ...state.profile }; updatedProfile.simulations.unshift(simToSave); saveProfile(updatedProfile); render(); showAlert('נשמר בהצלחה', 'הסימולציה תועדה בהצלחה.', 'check-circle'); };
+            const imgInput = document.getElementById('sim-image');
+            if (imgInput.files && imgInput.files[0]) { window.resizeImage(imgInput.files[0], (base64) => { newSim.imageBase64 = base64; finalizeSave(newSim); }); } 
+            else { finalizeSave(newSim); }
+        };
+        window.deleteSimulation = (id) => { if(confirm("למחוק סימולציה זו?")) { const updatedProfile = { ...state.profile }; updatedProfile.simulations = updatedProfile.simulations.filter(s => s.id !== id); saveProfile(updatedProfile); render(); } };
+
+        window.updateCalc = (subject, value) => {
+            state.calc[subject] = parseInt(value); document.getElementById(`val-${subject}`).textContent = value;
+            const scores = calculatePsychoScore(state.calc.quant, state.calc.verbal, state.calc.english);
+            document.getElementById('score-multi').textContent = scores.multi; document.getElementById('score-quant').textContent = scores.quantE; document.getElementById('score-verbal').textContent = scores.verbalE;
+        };
+
+        window.addDictWord = (e) => {
+            e.preventDefault(); const word = document.getElementById('dict-word').value.trim(); const meaning = document.getElementById('dict-meaning').value.trim(); const lang = document.getElementById('dict-lang').value;
+            if (word && meaning) { const updatedProfile = { ...state.profile }; updatedProfile.customDictionary.words.unshift({ id: Date.now(), word, meaning, lang }); saveProfile(updatedProfile); render(); }
+        };
+        window.deleteDictWord = (id) => { const updatedProfile = { ...state.profile }; updatedProfile.customDictionary.words = updatedProfile.customDictionary.words.filter(w => w.id !== id); saveProfile(updatedProfile); render(); };
+        
+        window.addDictImage = (e) => { const file = e.target.files[0]; if(file) { window.resizeImage(file, (base64) => { const updatedProfile = { ...state.profile }; updatedProfile.customDictionary.images.unshift({ id: Date.now(), imageBase64: base64, note: '' }); saveProfile(updatedProfile); render(); }); } };
+        window.deleteDictImage = (id) => { const updatedProfile = { ...state.profile }; updatedProfile.customDictionary.images = updatedProfile.customDictionary.images.filter(img => img.id !== id); saveProfile(updatedProfile); render(); };
+        window.openImagePreview = (src) => { const w = window.open(""); w.document.write(`<img src="${src}" style="max-width: 100%; max-height: 100vh; display: block; margin: 0 auto;">`); };
+
+        window.startDictPractice = (mode) => {
+            const words = state.profile.customDictionary.words;
+            if (mode === 'american' && words.length < 4) return showAlert('שגיאה', 'יש להזין לפחות 4 מילים במילון לתרגול אמריקאי.', 'alert-triangle');
+            if (words.length === 0) return showAlert('שגיאה', 'המילון ריק.', 'alert-triangle');
+            state.dict = { practiceMode: mode, practiceQueue: [...words].sort(() => 0.5 - Math.random()), currentPracticeIndex: 0, practiceScore: 0, showAnswer: false }; switchView('dict_practice');
+        };
+        window.checkAmericanAnswer = (selectedMeaning) => {
+            if (state.dict.showAnswer) return; const isCorrect = selectedMeaning === state.dict.practiceQueue[state.dict.currentPracticeIndex].meaning;
+            if(isCorrect) state.dict.practiceScore++; state.dict.showAnswer = true; state.dict.lastAnswerCorrect = isCorrect; render();
+        };
+        window.checkTypingAnswer = (e) => {
+            e.preventDefault(); if (state.dict.showAnswer) return; const input = document.getElementById('typing-answer').value.trim(); const isCorrect = input === state.dict.practiceQueue[state.dict.currentPracticeIndex].meaning;
+            if(isCorrect) state.dict.practiceScore++; state.dict.showAnswer = true; state.dict.lastAnswerCorrect = isCorrect; render();
+        };
+        window.nextPracticeWord = () => { state.dict.currentPracticeIndex++; state.dict.showAnswer = false; render(); };
+        window.finishDictPractice = () => { showAlert('סיום', `ענית נכונה על ${state.dict.practiceScore} מתוך ${state.dict.practiceQueue.length} מילים.`, 'award'); switchView('dictionary_words'); };
+
+        window.sendMessageToAdmin = (e) => {
+            e.preventDefault(); const text = document.getElementById('student-msg-text').value.trim();
+            if(text) {
+                const updatedProfile = { ...state.profile }; updatedProfile.sentMessages.push({ id: Date.now(), text, date: new Date().toLocaleString('he-IL') });
+                saveProfile(updatedProfile); render(); showAlert('נשלח בהצלחה', 'ההודעה נשלחה לצוות ההדרכה.', 'send');
+            }
+        };
+        
+        window.openAdminMessageModal = (username) => { state.targetUserForMessage = username; document.getElementById('admin-message-target').textContent = `נמען: ${username}`; document.getElementById('admin-message-text').value = ''; document.getElementById('admin-message-modal').classList.remove('hidden'); document.getElementById('admin-message-modal').classList.add('flex'); };
+        window.closeAdminMessageModal = () => { document.getElementById('admin-message-modal').classList.add('hidden'); document.getElementById('admin-message-modal').classList.remove('flex'); state.targetUserForMessage = null; };
+        window.sendAdminMessage = () => {
+            const text = document.getElementById('admin-message-text').value.trim(); if(!text || !state.targetUserForMessage) return;
+            let usersDB = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]'); const userIndex = usersDB.findIndex(u => u.name === state.targetUserForMessage);
+            if (userIndex > -1) {
+                if(!usersDB[userIndex].messages) usersDB[userIndex].messages = [];
+                usersDB[userIndex].messages.push({ id: Date.now(), text: text, isRead: false, date: new Date().toLocaleString('he-IL') });
+                localStorage.setItem('psychoProUsersDB', JSON.stringify(usersDB)); showAlert('נשלח', `ההודעה נשלחה ל-${state.targetUserForMessage}.`, 'check');
+            }
+            closeAdminMessageModal(); render();
+        };
+
+        window.openAdminViewModal = (username) => {
+            let usersDB = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]'); const user = usersDB.find(u => u.name === username); if(!user) return;
+            document.getElementById('view-user-name').textContent = `תיק תלמיד: ${user.name}`; document.getElementById('view-user-login').textContent = `התחברות אחרונה: ${user.lastLogin || 'לא ידוע'}`;
+            let contentHTML = `
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="bg-zinc-50 p-4 rounded-xl border border-zinc-100 text-center"><div class="text-xs font-bold text-zinc-500 mb-1">סימולציות שבוצעו</div><div class="text-3xl font-black">${(user.simulations || []).length}</div></div>
+                    <div class="bg-zinc-50 p-4 rounded-xl border border-zinc-100 text-center"><div class="text-xs font-bold text-zinc-500 mb-1">מילים במילון</div><div class="text-3xl font-black">${(user.customDictionary?.words || []).length}</div></div>
+                </div>`;
+            if(user.simulations && user.simulations.length > 0) {
+                contentHTML += `<h4 class="font-bold text-zinc-900 border-b border-zinc-200 pb-2 mb-3">סימולציות אחרונות</h4><div class="space-y-3">`;
+                user.simulations.slice(0,3).forEach(sim => { contentHTML += `<div class="bg-white p-3 rounded-xl border border-zinc-200 text-sm flex justify-between items-center"><div><strong class="text-zinc-900">${sim.name}</strong> <span class="text-zinc-500">(${sim.date})</span></div><div class="flex gap-3 text-xs font-mono font-bold"><span class="text-blue-600">רב: ${sim.finalScores?.multi || '-'}</span></div></div>`; });
+                contentHTML += `</div>`;
+            }
+            document.getElementById('admin-view-content').innerHTML = contentHTML; document.getElementById('admin-view-modal').classList.remove('hidden'); document.getElementById('admin-view-modal').classList.add('flex');
+        };
+        window.closeAdminViewModal = () => { document.getElementById('admin-view-modal').classList.add('hidden'); document.getElementById('admin-view-modal').classList.remove('flex'); };
+
+        const generateStudentInboxHTML = (inbox) => {
+            if(!inbox || inbox.length === 0) return `<div class="text-zinc-400 text-sm py-4">אין הודעות נכנסות.</div>`;
+            return inbox.map(m => `
+                <div class="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm mb-3">
+                    <div class="flex justify-between text-xs text-zinc-500 mb-2"><span>מאת: צוות הדרכה</span><span dir="ltr">${m.date}</span></div>
+                    <p class="text-zinc-900">${m.text}</p>
+                </div>`).join('');
+        };
+
+        const generateAdminIncomingMessagesHTML = (usersDB) => {
+            let html = '';
+            usersDB.forEach(u => {
+                if(u.sentMessages && u.sentMessages.length > 0) {
+                    u.sentMessages.forEach(m => {
+                        html += `
+                            <div class="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm mb-3">
+                                <div class="flex justify-between items-center mb-2">
+                                    <div class="text-sm font-bold text-blue-600">מאת: ${u.name}</div>
+                                    <div class="text-xs text-zinc-400" dir="ltr">${m.date}</div>
+                                </div>
+                                <p class="text-zinc-800 text-sm mb-3">${m.text}</p>
+                                <button onclick="openAdminMessageModal('${u.name}')" class="text-xs font-bold text-zinc-500 hover:text-zinc-900 bg-zinc-100 px-3 py-1.5 rounded-lg transition">השב לתלמיד</button>
+                            </div>`;
+                    });
+                }
+            });
+            return html || '<div class="text-zinc-500 text-sm">אין הודעות חדשות מתלמידים.</div>';
+        };
+
+        const renderLoginHTML = () => `
+            <div class="bg-white p-10 md:p-14 rounded-[2rem] shadow-2xl border border-zinc-200 w-full max-w-md relative animate-in fade-in duration-700">
+                <div class="absolute top-0 right-0 w-full h-2 bg-zinc-900"></div>
+                <div class="flex justify-center mb-8"><div class="bg-zinc-100 p-4 rounded-full border border-zinc-200"><i data-lucide="graduation-cap" class="w-8 h-8 text-zinc-900"></i></div></div>
+                <h2 class="text-3xl font-extrabold text-center text-zinc-900 mb-2 tracking-tight">PsychoMaster</h2>
+                <p class="text-center text-zinc-500 mb-8 text-sm">המערכת המתקדמת לניהול פסיכומטרי</p>
+                <div id="login-error" class="hidden mb-6 p-4 bg-zinc-900 text-white rounded-xl text-sm font-medium text-center shadow-lg"></div>
+                <form onsubmit="handleLogin(event)" class="space-y-5">
+                    <div><input type="text" id="login-username" required class="w-full px-4 py-3.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-zinc-900 transition-all font-medium" placeholder="שם משתמש (חדש נוצר אוטומטית)"></div>
+                    <div><input type="password" id="login-password" required class="w-full px-4 py-3.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-zinc-900 transition-all font-medium" placeholder="סיסמה"></div>
+                    <button type="submit" class="w-full py-4 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 transition-colors mt-6 shadow-xl">התחברות</button>
+                </form>
+            </div>`;
+
+        const renderSidebarHTML = () => {
+            const p = state.profile || USER_STATS_TEMPLATE;
+            let menuGroups = [];
+            if (state.isAdmin) {
+                menuGroups = [ { title: 'ניהול אדמין', items: [ { id: 'admin_dashboard', label: 'ניהול תלמידים והודעות', icon: 'users' } ] } ];
+            } else {
+                menuGroups = [
+                    { title: 'ניהול זמן', items: [
+                        { id: 'dashboard', label: 'סקירה כללית', icon: 'layout-dashboard' },
+                        { id: 'calendar', label: 'לוח שנה חודשי', icon: 'calendar-days' },
+                        { id: 'tasks', label: 'משימות אישיות', icon: 'check-square' },
+                        { id: 'schedule', label: 'מערכת קורס', icon: 'clock' }
+                    ]},
+                    { title: 'מעקב וציונים', items: [
+                        { id: 'simulations', label: 'מרכז סימולציות', icon: 'target' },
+                        { id: 'calculator', label: 'מחשבון המרה', icon: 'calculator' }
+                    ]},
+                    { title: 'עזרי למידה', items: [
+                        { id: 'dictionary_words', label: 'מילון אישי', icon: 'book-open' },
+                        { id: 'dictionary_images', label: 'גלריית צילומים', icon: 'image' },
+                        { id: 'messages', label: 'תקשורת והודעות', icon: 'message-square' }
+                    ]}
+                ];
+            }
+            
+            let navLinks = menuGroups.map(group => `
+                <div class="mb-4 last:mb-0">
+                    ${group.title ? `<div class="text-xs font-bold text-zinc-600 uppercase tracking-wider mb-2 px-4 hidden md:block">${group.title}</div>` : ''}
+                    <div class="space-y-1">
+                        ${group.items.map(item => {
+                            const isActive = state.view === item.id || (item.id === 'dictionary_words' && state.view === 'dict_practice');
+                            const activeClass = isActive ? 'bg-zinc-100 text-zinc-900 font-bold shadow-sm' : 'hover:bg-zinc-900 hover:text-zinc-200 text-zinc-500 font-medium';
+                            return `
+                                <button onclick="switchView('${item.id}')" class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all whitespace-nowrap ${activeClass} w-full text-right group">
+                                    <i data-lucide="${item.icon}" class="w-4 h-4 transition-transform group-hover:scale-110"></i>
+                                    <span class="hidden md:block text-sm tracking-wide">${item.label}</span>
+                                </button>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `).join('');
+
+            return `
+                <div class="p-6 flex items-center gap-3 text-white border-b border-zinc-900">
+                    <div class="bg-zinc-100 p-2 rounded-lg"><i data-lucide="graduation-cap" class="w-5 h-5 text-zinc-900"></i></div>
+                    <span class="text-xl font-extrabold tracking-tight hidden md:block">Psycho<span class="font-light">Master</span></span>
+                </div>
+                <nav class="flex-1 p-4 overflow-y-auto no-scrollbar flex md:flex-col gap-4 md:gap-0">${navLinks}</nav>
+                <div class="p-6 border-t border-zinc-900 hidden md:block">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-white border border-zinc-700">${p.name ? p.name.charAt(0) : 'U'}</div>
+                            <div><div class="text-sm font-bold text-white truncate max-w-[100px]">${p.name || 'User'}</div><div class="text-xs text-zinc-500 mt-0.5">${state.isAdmin ? 'אדמין' : 'פרופיל אישי'}</div></div>
+                        </div>
+                        <button onclick="handleLogout()" class="text-zinc-500 hover:text-white transition-colors" title="התנתק"><i data-lucide="log-out" class="w-5 h-5"></i></button>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderDashboardHTML = () => {
+            const p = state.profile;
+            const diffDays = p.examDate ? Math.ceil((new Date(p.examDate) - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24)) : null;
+            return `
+                <div class="space-y-6 animate-in fade-in duration-500 max-w-5xl mx-auto">
+                    <div class="bg-white rounded-[2rem] border border-zinc-200 p-8 md:p-10 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
+                        <div class="text-center md:text-right">
+                            <h2 class="text-3xl md:text-4xl font-light text-zinc-900 mb-2 tracking-tight">שלום, <span class="font-bold">${p.name}</span>.</h2>
+                            <p class="text-zinc-500 text-lg">מרכז הבקרה האישי שלך ללמידה פסיכומטרית.</p>
+                        </div>
+                        <div class="shrink-0 text-center">
+                            ${diffDays !== null && diffDays >= 0 ? `
+                                <div class="bg-zinc-900 text-white px-8 py-4 rounded-2xl shadow-lg border border-zinc-800">
+                                    <div class="text-sm text-zinc-400 mb-1 font-medium tracking-wide">הבחינה בעוד</div>
+                                    <div class="text-4xl font-black">${diffDays} <span class="text-xl font-medium text-zinc-400">ימים</span></div>
+                                </div>
+                                <div class="mt-3 text-xs text-zinc-400 hover:text-zinc-800 cursor-pointer transition underline" onclick="saveProfile({...state.profile, examDate: null}); render();">שנה תאריך בחינה</div>
+                            ` : `
+                                <div class="bg-zinc-50 px-6 py-4 rounded-2xl border border-zinc-200">
+                                    <div class="text-sm font-semibold text-zinc-700 mb-2">מתי הבחינה שלך?</div>
+                                    <input type="date" onchange="saveProfile({...state.profile, examDate: event.target.value}); render();" class="bg-white border border-zinc-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-zinc-900 font-mono w-full">
+                                    <p class="text-xs text-zinc-500 mt-2">יוסף אוטומטית ללוח השנה.</p>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-zinc-900 text-white rounded-2xl p-8 border border-zinc-800 shadow-xl relative overflow-hidden">
+                            <div class="relative z-10 flex flex-col items-center justify-center text-center h-full">
+                                <h3 class="text-2xl font-bold mb-2">טיימר פומודורו</h3>
+                                <div class="text-sm font-bold tracking-widest text-zinc-400 uppercase mb-4">${state.pomodoro.mode === 'work' ? 'זמן למידה' : 'זמן הפסקה'}</div>
+                                <div class="text-7xl font-black font-mono tracking-widest mb-6" id="pomodoro-display">${formatTimeObj(state.pomodoro.timeLeft)}</div>
+                                <div class="flex gap-3 w-full justify-center">
+                                    <button onclick="togglePomodoro()" class="px-6 py-3 bg-white text-zinc-900 rounded-xl font-bold hover:bg-zinc-100 shadow-md flex-1 max-w-[120px]">${state.pomodoro.isRunning ? 'השהה' : 'הפעל'}</button>
+                                    <button onclick="resetPomodoro()" class="px-4 py-3 bg-zinc-800 text-zinc-300 rounded-xl font-bold hover:bg-zinc-700 border border-zinc-700"><i data-lucide="rotate-ccw" class="w-5 h-5"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-2xl p-8 border border-zinc-200 shadow-sm flex flex-col justify-center">
+                            <h3 class="text-lg font-bold text-zinc-900 mb-4 border-b border-zinc-100 pb-2">משימות פתוחות להיום</h3>
+                            <div class="space-y-3">
+                                ${p.todos.filter(t => !t.done).slice(0,4).map(t => `<div class="flex items-center gap-3 text-sm text-zinc-700"><i data-lucide="circle" class="w-4 h-4 text-zinc-300"></i> ${t.title}</div>`).join('') || '<div class="text-zinc-400 text-sm">אין משימות פתוחות!</div>'}
+                            </div>
+                            <button onclick="switchView('tasks')" class="mt-6 text-sm text-blue-600 font-bold hover:underline text-right">לניהול משימות אישיות &larr;</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderCalendarHTML = () => {
+            const p = state.profile;
+            const year = state.calendarDate.getFullYear();
+            const month = state.calendarDate.getMonth();
+            const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+            
+            const firstDayIndex = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const examDateObj = p.examDate ? new Date(p.examDate) : null;
+            
+            let daysHTML = '';
+            for(let i=0; i<firstDayIndex; i++) { daysHTML += `<div class="bg-zinc-50/50 rounded-xl border border-zinc-100 min-h-[100px]"></div>`; }
+            
+            for(let d=1; d<=daysInMonth; d++) {
+                const currentDateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const currentDayOfWeek = new Date(year, month, d).getDay();
+                const currentDateObj = new Date(year, month, d);
+                const isAfterExam = examDateObj && currentDateObj > examDateObj;
+                const isExamDay = p.examDate && currentDateStr === p.examDate;
+                
+                let items = [];
+                if (!isAfterExam) {
+                    p.courseSettings.weeklyClasses.filter(c => c.dayOfWeek === currentDayOfWeek).forEach(c => items.push({ type: 'class', time: c.startTime, text: `שיעור (${c.isZoom?'זום':'פרונטלי'})`, color: 'bg-zinc-900 text-white' }));
+                    p.todos.filter(t => t.isRecurring && t.dayOfWeek === currentDayOfWeek).forEach(t => items.push({ type: 'task', time: t.time||'', text: t.title, color: t.done ? 'bg-emerald-100 text-emerald-800 line-through' : 'bg-blue-100 text-blue-800' }));
+                }
+                
+                p.todos.filter(t => t.date === currentDateStr && !t.isRecurring).forEach(t => items.push({ type: 'task', time: t.time||'', text: t.title, color: t.done ? 'bg-emerald-100 text-emerald-800 line-through' : 'bg-blue-100 text-blue-800' }));
+                p.calendarEvents.filter(e => e.date === currentDateStr).forEach(e => items.push({ id: e.id, type: 'event', time: e.time||'', text: e.title, color: 'bg-purple-100 text-purple-800 border border-purple-200 cursor-pointer' }));
+
+                if (isExamDay) {
+                    items.push({ type: 'exam', time: '', text: '🌟 פסיכומטרי! 🌟', color: 'bg-red-500 text-white font-bold animate-pulse shadow-md' });
+                }
+
+                items.sort((a,b) => (a.time||'24:00').localeCompare(b.time||'24:00'));
+
+                const itemsHTML = items.map(item => `
+                    <div ${item.type==='event' ? `onclick="deleteEvent(${item.id})"` : ''} class="text-[10px] sm:text-xs px-1.5 py-1 mb-1 rounded font-medium truncate ${item.color}" title="${item.text}">
+                        ${item.time ? `<span class="opacity-70 mr-1">${item.time}</span>` : ''}${item.text}
+                    </div>
+                `).join('');
+
+                const isToday = currentDateStr === new Date().toISOString().split('T')[0];
+                daysHTML += `
+                    <div class="bg-white rounded-xl border ${isToday ? 'border-zinc-900 shadow-md ring-1 ring-zinc-900' : 'border-zinc-200'} ${isExamDay ? 'bg-red-50/50' : ''} min-h-[100px] p-2 flex flex-col group relative">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="text-sm font-bold ${isToday || isExamDay ? 'text-zinc-900' : 'text-zinc-500'}">${d}</span>
+                            <button onclick="openEventModal('${currentDateStr}')" class="opacity-0 group-hover:opacity-100 text-zinc-300 hover:text-zinc-900 transition"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                        </div>
+                        <div class="flex-1 overflow-y-auto no-scrollbar">${itemsHTML}</div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="max-w-6xl mx-auto animate-in fade-in duration-500">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+                        <div>
+                            <h2 class="text-3xl font-bold text-zinc-900 mb-1 tracking-tight">לוח שנה חודשי</h2>
+                            <p class="text-zinc-500">תכנון אסטרטגי, משימות, שיעורים ומבחן מרוכזים במקום אחד.</p>
+                        </div>
+                        <div class="flex items-center gap-4 bg-white px-4 py-2 rounded-xl border border-zinc-200 shadow-sm">
+                            <button onclick="changeCalendarMonth(1)" class="p-2 hover:bg-zinc-100 rounded-lg transition"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+                            <span class="font-bold text-lg min-w-[120px] text-center">${monthNames[month]} ${year}</span>
+                            <button onclick="changeCalendarMonth(-1)" class="p-2 hover:bg-zinc-100 rounded-lg transition"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+                        </div>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl border border-zinc-200 shadow-sm">
+                        <div class="grid grid-cols-7 gap-4 mb-4 text-center">
+                            ${['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'].map(d => `<div class="font-bold text-zinc-500 text-sm">${d}'</div>`).join('')}
+                        </div>
+                        <div class="calendar-grid">${daysHTML}</div>
+                        <div class="mt-4 text-xs text-zinc-400 flex flex-wrap gap-4 justify-center">
+                            <span class="flex items-center gap-1"><div class="w-3 h-3 rounded bg-zinc-900"></div> שיעור קורס</span>
+                            <span class="flex items-center gap-1"><div class="w-3 h-3 rounded bg-blue-100"></div> משימה</span>
+                            <span class="flex items-center gap-1"><div class="w-3 h-3 rounded bg-purple-100 border border-purple-200"></div> אירוע חופשי (לחיצה מוחקת)</span>
+                            <span class="flex items-center gap-1"><div class="w-3 h-3 rounded bg-red-500"></div> מועד פסיכומטרי</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderTasksHTML = () => {
+            const p = state.profile;
+            const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+            const todosHTML = p.todos.length === 0 ? 
+                `<div class="text-center py-20 bg-white rounded-2xl border border-zinc-200">
+                    <i data-lucide="check-circle" class="w-12 h-12 text-zinc-300 mx-auto mb-4"></i>
+                    <h3 class="text-xl font-semibold text-zinc-700 mb-1">אין משימות</h3>
+                </div>`
+                : p.todos.map(todo => {
+                    const timeInfo = todo.isRecurring ? `כל יום ${dayNames[todo.dayOfWeek]} ב-${todo.time||'--'}` : (todo.date ? `${todo.date.split('-').reverse().join('.')} ${todo.time||''}` : 'ללא מועד');
+                    const isTimerActive = state.activeTaskTimer.id === todo.id;
+                    let timerSection = '';
+                    if (todo.duration) {
+                        if (isTimerActive) {
+                            timerSection = `<div class="mt-4 p-4 bg-zinc-900 rounded-xl flex items-center justify-between text-white animate-in fade-in"><div class="flex items-center gap-3"><div class="w-3 h-3 rounded-full bg-red-500 animate-pulse"></div><span class="font-mono text-xl font-bold tracking-wider" id="timer-display-${todo.id}">${formatTimeObj(state.activeTaskTimer.timeLeft)}</span></div><button onclick="stopTaskTimer()" class="px-4 py-2 bg-white/10 rounded-lg text-sm font-medium">הפסק שעון</button></div>`;
+                        } else {
+                            timerSection = `<div class="mt-4 flex items-center justify-between pt-4 border-t border-zinc-100"><div class="text-sm font-semibold text-zinc-500 flex items-center gap-2"><i data-lucide="clock" class="w-4 h-4"></i> ${todo.duration} דקות</div><button onclick="startTaskTimer(${todo.id}, ${todo.duration})" class="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-900 rounded-lg text-sm font-bold flex items-center gap-2"><i data-lucide="play" class="w-4 h-4"></i> התחל</button></div>`;
+                        }
+                    }
+                    return `
+                    <div class="bg-white border border-zinc-200 rounded-2xl p-5 shadow-sm group relative">
+                        <div class="flex items-start gap-4">
+                            <button onclick="toggleTodo(${todo.id})" class="mt-1 w-6 h-6 rounded border-2 flex items-center justify-center shrink-0 ${todo.done ? 'bg-zinc-900 border-zinc-900' : 'border-zinc-300'}">${todo.done ? '<i data-lucide="check" class="w-4 h-4 text-white"></i>' : ''}</button>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h4 class="text-lg font-bold ${todo.done ? 'text-zinc-400 line-through' : 'text-zinc-900'}">${todo.title}</h4>
+                                        ${todo.desc ? `<p class="text-sm text-zinc-500 mt-1 mb-2 ${todo.done?'opacity-50':''}">${todo.desc.replace(/\n/g, '<br>')}</p>` : ''}
+                                    </div>
+                                    <div class="flex items-center gap-1">
+                                        <button onclick="openTaskModal(${todo.id})" class="text-zinc-300 hover:text-zinc-900 p-1 transition"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                                        <button onclick="deleteTodo(${todo.id})" class="text-zinc-300 hover:text-red-500 p-1 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                    </div>
+                                </div>
+                                <div class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-zinc-50 text-zinc-600 rounded-md text-xs font-medium border border-zinc-200 mt-2"><i data-lucide="${todo.isRecurring ? 'repeat' : 'calendar'}" class="w-3.5 h-3.5"></i> ${timeInfo}</div>
+                                ${!todo.done ? timerSection : ''}
+                            </div>
+                        </div>
+                    </div>`;
+                });
+
+            return `
+                <div class="max-w-4xl mx-auto animate-in fade-in duration-500">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+                        <div><h2 class="text-3xl font-bold text-zinc-900 mb-1 tracking-tight">משימות אישיות</h2><p class="text-zinc-500">ניהול מטלות וזמני למידה עצמאית.</p></div>
+                        <button onclick="openTaskModal()" class="px-6 py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 shadow-md flex items-center gap-2"><i data-lucide="plus" class="w-5 h-5"></i> הוסף משימה</button>
+                    </div>
+                    <div class="grid gap-4">${Array.isArray(todosHTML) ? todosHTML.join('') : todosHTML}</div>
+                </div>
+            `;
+        };
+
+        const renderScheduleHTML = () => {
+            const p = state.profile; const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+            if (!p.courseSettings.isTakingCourse) {
+                return `<div class="max-w-3xl mx-auto text-center py-24 bg-white rounded-2xl border border-zinc-200"><h2 class="text-2xl font-bold mb-4">מערכת שעות קורס</h2><p class="text-zinc-500 mb-8">הגדר ימים ושעות קבועים של שיעורי הקורס שלך.</p><button onclick="toggleCourseStatus(true)" class="px-8 py-3.5 bg-zinc-900 text-white rounded-xl font-bold">אני לומד בקורס - הגדר מערכת</button></div>`;
+            }
+            let scheduleByDay = Array(7).fill().map(() => []); p.courseSettings.weeklyClasses.forEach(c => scheduleByDay[c.dayOfWeek].push(c));
+            const scheduleHTML = scheduleByDay.map((classes, dayIndex) => {
+                if (classes.length === 0) return '';
+                return `
+                    <div class="mb-8 last:mb-0 relative">
+                        <div class="flex items-center gap-4 mb-4"><div class="w-10 h-10 bg-zinc-900 text-white rounded-xl flex items-center justify-center font-bold">${days[dayIndex].charAt(0)}'</div><h3 class="text-lg font-bold text-zinc-900">יום ${days[dayIndex]}</h3></div>
+                        <div class="space-y-3 pl-14">
+                            ${classes.map(c => `
+                                <div class="bg-white border border-zinc-200 rounded-xl p-4 flex justify-between shadow-sm group ${state.editingClassId === c.id ? 'ring-2 ring-zinc-900' : ''}">
+                                    <div class="flex items-center gap-4"><div class="font-mono font-bold text-zinc-700" dir="ltr">${c.startTime} ${c.endTime ? `<span class="text-zinc-400 font-normal">- ${c.endTime}</span>` : ''}</div><div class="w-px h-6 bg-zinc-200"></div>${c.isZoom ? `<span class="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-bold flex items-center gap-1"><i data-lucide="video" class="w-3 h-3"></i> זום</span>` : `<span class="px-2 py-1 bg-zinc-100 text-zinc-700 rounded text-xs font-bold flex items-center gap-1"><i data-lucide="users" class="w-3 h-3"></i> פרונטלי</span>`}</div>
+                                    <div class="flex gap-1 opacity-0 group-hover:opacity-100"><button onclick="editWeeklyClass(${c.id})" class="text-zinc-400 hover:text-zinc-900 p-1"><i data-lucide="edit-2" class="w-4 h-4"></i></button><button onclick="deleteWeeklyClass(${c.id})" class="text-zinc-400 hover:text-red-500 p-1"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>`;
+            }).join('');
+
+            return `
+                <div class="max-w-5xl mx-auto animate-in fade-in duration-500">
+                    <div class="flex justify-between items-end mb-8">
+                        <div><h2 class="text-3xl font-bold text-zinc-900 mb-1">מערכת שעות קבועה</h2><p class="text-zinc-500">הלו"ז השבועי של הקורס. יוצג אוטומטית בלוח השנה.</p></div>
+                        <button onclick="toggleCourseStatus(false)" class="text-sm text-zinc-400 hover:text-zinc-900 underline">בטל קורס</button>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div class="lg:col-span-1"><div class="bg-white rounded-2xl border border-zinc-200 p-6 sticky top-6">
+                            <h3 id="class-form-title" class="font-bold mb-4">${state.editingClassId ? 'עריכת שיעור' : 'הוספת שיעור'}</h3>
+                            <form onsubmit="saveWeeklyClass(event)" class="space-y-4">
+                                <select id="class-day" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:border-zinc-500 font-medium">${days.map((d,i) => `<option value="${i}">יום ${d}</option>`).join('')}</select>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div><label class="block text-xs font-bold text-zinc-500 mb-1">התחלה</label><input type="time" id="class-start-time" required class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-3 text-sm font-mono focus:border-zinc-500"></div>
+                                    <div><label class="block text-xs font-bold text-zinc-500 mb-1">סיום</label><input type="time" id="class-end-time" required class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-3 text-sm font-mono focus:border-zinc-500"></div>
+                                </div>
+                                <div class="bg-zinc-50 p-4 rounded-xl border border-zinc-100 flex justify-between"><span class="text-sm font-bold">בזום?</span><div class="switch"><input type="checkbox" id="class-zoom"><span class="slider-toggle"></span></div></div>
+                                <div class="flex gap-2"><button type="submit" id="class-form-btn" class="flex-1 py-3 bg-zinc-900 text-white rounded-xl font-bold">${state.editingClassId ? 'שמור' : 'הוסף'}</button>${state.editingClassId ? `<button type="button" onclick="cancelEditClass()" class="px-4 bg-zinc-100 text-zinc-700 rounded-xl font-bold">בטל</button>` : ''}</div>
+                            </form>
+                        </div></div>
+                        <div class="lg:col-span-2"><div class="bg-zinc-50/50 rounded-2xl border border-zinc-200 p-8 min-h-[400px]">${scheduleHTML || `<div class="text-center text-zinc-400 py-10">אין שיעורים במערכת.</div>`}</div></div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderSimulationsHTML = () => {
+            const p = state.profile; const sims = p.simulations || [];
+            
+            const fsTimerHTML = state.simTimer.isFullscreen ? `
+                <div class="fixed inset-0 z-[200] bg-zinc-950 flex flex-col items-center justify-center animate-in fade-in">
+                    <div class="text-zinc-500 font-bold tracking-widest uppercase mb-4">זמן נותר לפרק/סימולציה</div>
+                    <div id="sim-timer-display-fs" class="text-9xl font-black text-white font-mono tracking-widest mb-12">${formatTimeObj(state.simTimer.timeLeft)}</div>
+                    <div class="flex gap-6">
+                        <button onclick="toggleSimTimer()" class="px-10 py-4 bg-white text-zinc-900 rounded-2xl font-bold hover:bg-zinc-200 transition text-xl w-48">${state.simTimer.isRunning ? 'השהה' : 'המשך'}</button>
+                        <button onclick="stopSimTimer()" class="px-8 py-4 bg-zinc-800 text-zinc-300 rounded-2xl font-bold hover:bg-zinc-700 transition text-xl border border-zinc-700">סיים וצא</button>
+                    </div>
+                </div>
+            ` : '';
+
+            const simsListHTML = sims.length === 0 ? `<div class="text-center py-12 px-4 bg-white rounded-2xl border border-zinc-200 col-span-full"><h3 class="text-lg font-medium text-zinc-600">אין סימולציות מתועדות</h3></div>` : 
+                sims.map(sim => `
+                    <div class="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm relative group">
+                        <button onclick="deleteSimulation(${sim.id})" class="absolute top-4 left-4 text-zinc-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+                        <div class="mb-4 border-b border-zinc-100 pb-4"><h4 class="text-xl font-bold text-zinc-900">${sim.name}</h4><div class="text-sm text-zinc-500">${sim.date}</div></div>
+                        
+                        <div class="flex justify-between items-center bg-zinc-50 p-3 rounded-xl mb-4 border border-zinc-100">
+                            <div class="text-center"><div class="text-xs text-zinc-500 font-bold uppercase">רב-תחומי</div><div class="text-2xl font-black text-blue-600">${sim.finalScores?.multi || '-'}</div></div>
+                            <div class="w-px h-8 bg-zinc-200"></div>
+                            <div class="text-center"><div class="text-xs text-zinc-500 font-bold uppercase">דגש כמותי</div><div class="text-xl font-bold text-zinc-900">${sim.finalScores?.quantE || '-'}</div></div>
+                            <div class="w-px h-8 bg-zinc-200"></div>
+                            <div class="text-center"><div class="text-xs text-zinc-500 font-bold uppercase">דגש מילולי</div><div class="text-xl font-bold text-zinc-900">${sim.finalScores?.verbalE || '-'}</div></div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-2 text-center mb-4">
+                            <div class="text-xs"><span class="text-zinc-500 block mb-1">כמותי (גלם)</span><span class="font-bold font-mono">${sim.scores.quant}</span></div>
+                            <div class="text-xs border-r border-zinc-100"><span class="text-zinc-500 block mb-1">מילולי (גלם)</span><span class="font-bold font-mono">${sim.scores.verbal}</span></div>
+                            <div class="text-xs border-r border-zinc-100"><span class="text-zinc-500 block mb-1">אנגלית (גלם)</span><span class="font-bold font-mono">${sim.scores.english}</span></div>
+                        </div>
+                        <div class="space-y-2 text-sm text-zinc-600 bg-zinc-50/50 p-3 rounded-lg">
+                            ${sim.notes.quant ? `<div><span class="font-bold">לקחי כמותי:</span> ${sim.notes.quant}</div>` : ''}
+                            ${sim.notes.verbal ? `<div><span class="font-bold">לקחי מילולי:</span> ${sim.notes.verbal}</div>` : ''}
+                            ${sim.notes.english ? `<div><span class="font-bold">לקחי אנגלית:</span> ${sim.notes.english}</div>` : ''}
+                        </div>
+                        ${sim.imageBase64 ? `<div class="mt-4"><img src="${sim.imageBase64}" class="img-preview w-full" onclick="openImagePreview('${sim.imageBase64}')"></div>` : ''}
+                    </div>
+                `).join('');
+
+            return `
+                ${fsTimerHTML}
+                <div class="max-w-6xl mx-auto animate-in fade-in duration-500">
+                    <div class="mb-8">
+                        <h2 class="text-3xl font-bold text-zinc-900 mb-1">מרכז סימולציות</h2>
+                        <p class="text-zinc-500">ניהול זמנים והפקת לקחים מתקדמת.</p>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                        <div class="lg:col-span-4 space-y-6">
+                            <!-- Timer -->
+                            <div class="bg-zinc-900 rounded-2xl p-8 text-center shadow-xl relative overflow-hidden border border-zinc-800">
+                                <h3 class="text-zinc-400 font-bold mb-4 uppercase text-xs tracking-widest">שעון עצר</h3>
+                                <select id="sim-timer-mode" onchange="resetSimTimer()" class="mb-4 bg-zinc-800 text-white text-sm rounded-lg px-3 py-2 border border-zinc-700 outline-none w-full">
+                                    <option value="20">פרק בודד (20 דקות)</option>
+                                    <option value="160">סימולציה מלאה (160 דקות)</option>
+                                </select>
+                                <div class="text-6xl font-black text-white font-mono tracking-widest mb-6" id="sim-timer-display">${formatTimeObj(state.simTimer.timeLeft)}</div>
+                                <div class="flex justify-center gap-3">
+                                    <button onclick="toggleSimTimer()" class="px-6 py-3 bg-white text-zinc-900 rounded-xl font-bold hover:bg-zinc-100 flex-1 shadow-sm">${state.simTimer.isRunning ? 'השהה' : 'הפעל מסך מלא'}</button>
+                                    <button onclick="resetSimTimer()" class="px-4 py-3 bg-zinc-800 text-zinc-300 rounded-xl font-bold hover:bg-zinc-700 border border-zinc-700"><i data-lucide="rotate-ccw" class="w-5 h-5"></i></button>
+                                </div>
+                            </div>
+                            <!-- Add Sim -->
+                            <div class="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+                                <h3 class="font-bold text-zinc-900 mb-4">תיעוד סימולציה</h3>
+                                <form onsubmit="saveSimulation(event)" class="space-y-4">
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <input type="date" id="sim-date" required class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-sm font-mono focus:border-zinc-900" value="${new Date().toISOString().split('T')[0]}">
+                                        <input type="text" id="sim-name" required class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:border-zinc-900" placeholder="שם (למשל: סתיו 2023)">
+                                    </div>
+                                    <div class="bg-blue-50/50 p-3 rounded-xl border border-blue-100 mb-2">
+                                        <div class="text-xs font-bold text-blue-800 mb-2 text-center">צפי ציון רב-תחומי מחושב אוטומטית</div>
+                                        <div class="flex justify-between items-center px-4">
+                                            <div class="text-center"><span class="block text-[10px] text-zinc-500">כמותי</span><span id="sim-preview-quantE" class="font-bold text-lg">200</span></div>
+                                            <div class="text-center text-3xl font-black text-blue-600" id="sim-preview-multi">200</div>
+                                            <div class="text-center"><span class="block text-[10px] text-zinc-500">מילולי</span><span id="sim-preview-verbalE" class="font-bold text-lg">200</span></div>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <input type="number" id="sim-score-quant" oninput="previewSimScores()" min="50" max="150" placeholder="כמותי (50-150)" required class="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-1 py-2 text-xs text-center font-mono focus:border-zinc-900">
+                                        <input type="number" id="sim-score-verbal" oninput="previewSimScores()" min="50" max="150" placeholder="מילולי (50-150)" required class="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-1 py-2 text-xs text-center font-mono focus:border-zinc-900">
+                                        <input type="number" id="sim-score-english" oninput="previewSimScores()" min="50" max="150" placeholder="אנגלית (50-150)" required class="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-1 py-2 text-xs text-center font-mono focus:border-zinc-900">
+                                    </div>
+                                    <div class="space-y-2">
+                                        <textarea id="sim-notes-quant" rows="2" placeholder="לקחים בפרק הכמותי..." class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-sm resize-none focus:border-zinc-900"></textarea>
+                                        <textarea id="sim-notes-verbal" rows="2" placeholder="לקחים בפרק המילולי..." class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-sm resize-none focus:border-zinc-900"></textarea>
+                                        <textarea id="sim-notes-english" rows="2" placeholder="לקחים בפרק האנגלית..." class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-sm resize-none focus:border-zinc-900"></textarea>
+                                    </div>
+                                    <div class="border border-dashed border-zinc-300 rounded-xl p-3 text-center hover:bg-zinc-50 transition relative">
+                                        <input type="file" id="sim-image" accept="image/*" capture="environment" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                                        <div class="flex items-center justify-center gap-2 text-zinc-500"><i data-lucide="camera" class="w-5 h-5"></i><span class="text-xs font-bold">צלם דף תשובות/חישובים</span></div>
+                                    </div>
+                                    <button type="submit" class="w-full py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800">שמור למעקב</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="lg:col-span-8"><div class="grid grid-cols-1 md:grid-cols-2 gap-6">${simsListHTML}</div></div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderCalculatorHTML = () => `
+            <div class="max-w-4xl mx-auto animate-in fade-in duration-500">
+                <div class="mb-10 text-center sm:text-right">
+                    <h2 class="text-3xl font-bold text-zinc-900 mb-1">מחשבון המרה</h2>
+                    <p class="text-zinc-500">שחק עם ציוני הגלם ותראה איך הם משפיעים על הציון הסופי (200-800).</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                    <div class="bg-white rounded-[2rem] border border-zinc-200 p-8 shadow-sm space-y-8">
+                        ${[{ id: 'quant', label: 'חשיבה כמותית' }, { id: 'verbal', label: 'חשיבה מילולית' }, { id: 'english', label: 'אנגלית' }].map(subj => `
+                            <div>
+                                <div class="flex justify-between items-center mb-4">
+                                    <label class="font-bold text-zinc-800">${subj.label}</label>
+                                    <span id="val-${subj.id}" class="text-xl font-black text-zinc-900 bg-zinc-100 px-4 py-1.5 rounded-lg border border-zinc-200 font-mono">${state.calc[subj.id]}</span>
+                                </div>
+                                <div dir="ltr" class="relative pt-2">
+                                    <input type="range" min="50" max="150" value="${state.calc[subj.id]}" oninput="updateCalc('${subj.id}', this.value)" class="w-full">
+                                    <div class="flex justify-between text-xs text-zinc-400 mt-2 font-mono px-1"><span>50</span><span>150</span></div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="space-y-4">
+                        <div class="bg-zinc-900 text-white rounded-[2rem] p-8 shadow-xl text-center border border-zinc-800 relative overflow-hidden">
+                            <div class="absolute -top-10 -right-10 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
+                            <div class="text-zinc-400 font-bold uppercase tracking-wider text-xs mb-4 relative z-10">ציון רב-תחומי (רגיל)</div>
+                            <div id="score-multi" class="text-8xl font-black tracking-tighter font-mono relative z-10">500</div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-white rounded-2xl border border-zinc-200 p-6 text-center shadow-sm">
+                                <div class="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-2">דגש כמותי</div>
+                                <div id="score-quant" class="text-4xl font-black text-zinc-900 font-mono">500</div>
+                            </div>
+                            <div class="bg-white rounded-2xl border border-zinc-200 p-6 text-center shadow-sm">
+                                <div class="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-2">דגש מילולי</div>
+                                <div id="score-verbal" class="text-4xl font-black text-zinc-900 font-mono">500</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const renderDictionaryWordsHTML = () => {
+            const words = state.profile.customDictionary.words || [];
+            const wordsHTML = words.length === 0 ? `<div class="text-center py-10 bg-zinc-50 rounded-xl text-zinc-500">המילון ריק. הזן מילים להתחיל לתרגל.</div>` : 
+                words.map(w => `
+                    <div class="flex items-center justify-between p-4 bg-white border border-zinc-200 rounded-xl shadow-sm hover:border-zinc-300">
+                        <div><div class="font-bold text-lg" dir="${w.lang==='en'?'ltr':'rtl'}">${w.word}</div><div class="text-sm text-zinc-500">${w.meaning}</div></div>
+                        <button onclick="deleteDictWord(${w.id})" class="text-zinc-300 hover:text-red-500 p-2"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+                    </div>
+                `).join('');
+
+            return `
+                <div class="max-w-4xl mx-auto animate-in fade-in duration-500">
+                    <div class="mb-8"><h2 class="text-3xl font-bold text-zinc-900 mb-1">מילון אישי</h2><p class="text-zinc-500">הכנס מילים שנתקעת בהן ובחן את עצמך.</p></div>
+                    <div class="grid md:grid-cols-3 gap-8">
+                        <div class="md:col-span-2 bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+                            <form onsubmit="addDictWord(event)" class="mb-6 flex gap-2">
+                                <select id="dict-lang" class="bg-zinc-50 border border-zinc-200 rounded-xl px-2 text-sm"><option value="he">עב'</option><option value="en">אנג'</option></select>
+                                <input type="text" id="dict-word" placeholder="מילה" required class="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:border-zinc-900">
+                                <input type="text" id="dict-meaning" placeholder="פירוש" required class="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:border-zinc-900">
+                                <button type="submit" class="px-4 py-2 bg-zinc-900 text-white rounded-xl font-bold"><i data-lucide="plus" class="w-5 h-5"></i></button>
+                            </form>
+                            <div class="space-y-2 max-h-[400px] overflow-y-auto">${wordsHTML}</div>
+                        </div>
+                        <div class="bg-zinc-900 rounded-2xl p-6 text-white text-center border border-zinc-800 shadow-xl self-start">
+                            <i data-lucide="brain" class="w-12 h-12 mx-auto mb-4 text-zinc-400"></i>
+                            <h3 class="text-xl font-bold mb-2">מרכז בחינה</h3>
+                            <p class="text-sm text-zinc-400 mb-6">יש לך ${words.length} מילים. בחר מצב בחינה:</p>
+                            <div class="space-y-3">
+                                <button onclick="startDictPractice('american')" class="w-full py-3 bg-white text-zinc-900 rounded-xl font-bold hover:bg-zinc-100 flex justify-center gap-2"><i data-lucide="list"></i> אמריקאי</button>
+                                <button onclick="startDictPractice('typing')" class="w-full py-3 bg-zinc-800 text-white border border-zinc-700 rounded-xl font-bold hover:bg-zinc-700 flex justify-center gap-2"><i data-lucide="keyboard"></i> הקלדה</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderDictImagesHTML = () => {
+            const images = state.profile.customDictionary.images || [];
+            const imagesHTML = images.length === 0 ? `<div class="text-center py-10 text-zinc-500 col-span-full">אין תמונות בגלריה. העלה צילומים מספרים.</div>` : 
+                images.map(img => `
+                    <div class="bg-white rounded-xl border border-zinc-200 p-2 relative group overflow-hidden">
+                        <img src="${img.imageBase64}" class="w-full h-40 object-cover rounded-lg cursor-pointer" onclick="openImagePreview('${img.imageBase64}')">
+                        <button onclick="deleteDictImage(${img.id})" class="absolute top-4 left-4 bg-white/80 p-1.5 rounded-full text-red-500 opacity-0 group-hover:opacity-100 hover:bg-white transition shadow"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </div>
+                `).join('');
+
+            return `
+                <div class="max-w-5xl mx-auto animate-in fade-in duration-500">
+                    <div class="flex justify-between items-end mb-8">
+                        <div><h2 class="text-3xl font-bold text-zinc-900 mb-1">גלריית צילומים</h2><p class="text-zinc-500">צלם שאלות, טבלאות ומילים מהספר כדי לתרגל מכל מקום.</p></div>
+                        <div class="relative">
+                            <input type="file" id="dict-img-upload" accept="image/*" capture="environment" onchange="addDictImage(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                            <button class="px-6 py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 flex gap-2 pointer-events-none"><i data-lucide="camera" class="w-5 h-5"></i> העלה צילום חדש</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">${imagesHTML}</div>
+                </div>
+            `;
+        };
+
+        const renderDictPracticeHTML = () => {
+            const wordObj = state.dict.practiceQueue[state.dict.currentPracticeIndex];
+            const isEnglish = wordObj.lang === 'en';
+            const total = state.dict.practiceQueue.length; const current = state.dict.currentPracticeIndex + 1;
+            let practiceContent = '';
+
+            if (state.dict.practiceMode === 'american') {
+                const allWords = state.profile.customDictionary.words;
+                let wrongOptions = allWords.filter(w => w.id !== wordObj.id).sort(() => 0.5 - Math.random()).slice(0, 3);
+                let options = [wordObj, ...wrongOptions].sort(() => 0.5 - Math.random());
+                practiceContent = options.map(opt => {
+                    let btnClass = "bg-white border-zinc-200 hover:border-zinc-400";
+                    if (state.dict.showAnswer) {
+                        if (opt.id === wordObj.id) btnClass = "bg-green-50 border-green-500 text-green-800 font-bold";
+                        else btnClass = "bg-zinc-50 border-zinc-200 text-zinc-400 opacity-50";
+                    }
+                    return `<button ${state.dict.showAnswer ? 'disabled' : ''} onclick="checkAmericanAnswer('${opt.meaning.replace(/'/g, "\\'")}')" class="w-full text-right p-5 rounded-xl border-2 text-lg transition ${btnClass}">${opt.meaning}</button>`;
+                }).join('');
+            } else {
+                practiceContent = `
+                    <form onsubmit="checkTypingAnswer(event)">
+                        <input type="text" id="typing-answer" required ${state.dict.showAnswer ? 'disabled' : ''} autocomplete="off" class="w-full text-center text-xl p-4 bg-zinc-50 border-2 border-zinc-200 rounded-xl focus:border-zinc-500 mb-4" placeholder="הקלד פירוש בעברית">
+                        ${!state.dict.showAnswer ? `<button type="submit" class="w-full py-4 bg-zinc-900 text-white rounded-xl font-bold">בדוק תשובה</button>` : ''}
+                    </form>`;
+            }
+
+            let resultMessage = '';
+            if (state.dict.showAnswer) {
+                if (state.dict.lastAnswerCorrect) resultMessage = `<div class="text-green-600 font-bold text-xl flex justify-center gap-2 mb-6"><i data-lucide="check-circle"></i> מדויק!</div>`;
+                else resultMessage = `<div class="text-red-500 font-bold flex flex-col items-center gap-2 mb-6"><div><i data-lucide="x-circle" class="w-6 h-6 inline"></i> טעות.</div><div class="text-zinc-600 font-medium">נכון: <span class="text-zinc-900 bg-zinc-100 px-2 py-1 rounded">${wordObj.meaning}</span></div></div>`;
+            }
+
+            return `
+                <div class="max-w-2xl mx-auto animate-in fade-in duration-500 text-center">
+                    <div class="flex justify-between items-center mb-8 border-b border-zinc-200 pb-4">
+                        <button onclick="switchView('dictionary_words')" class="text-zinc-500 flex gap-1"><i data-lucide="arrow-right" class="w-5 h-5"></i> חזור</button>
+                        <span class="font-mono text-sm bg-white px-3 py-1 rounded-full border border-zinc-200">${current} / ${total}</span>
+                    </div>
+                    <div class="bg-white rounded-[2rem] border border-zinc-200 p-10 shadow-sm">
+                        <h2 class="text-6xl font-light text-zinc-900 mb-10" dir="${isEnglish ? 'ltr' : 'rtl'}">${wordObj.word}</h2>
+                        <div class="space-y-4 max-w-sm mx-auto">${practiceContent}</div>
+                        <div class="mt-8 min-h-[80px]">
+                            ${resultMessage}
+                            ${state.dict.showAnswer ? (current < total ? `<button onclick="nextPracticeWord()" class="px-8 py-3 bg-zinc-900 text-white rounded-xl font-bold mx-auto flex gap-2">הבא <i data-lucide="arrow-left" class="w-5 h-5"></i></button>` : `<button onclick="finishDictPractice()" class="px-8 py-3 bg-zinc-900 text-white rounded-xl font-bold mx-auto">סיום תרגול</button>`) : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderMessagesHTML = () => {
+            const p = state.profile;
+            const inboxHTML = generateStudentInboxHTML(p.messages || []);
+            const outboxHTML = (p.sentMessages || []).length === 0 ? `<div class="text-zinc-400 text-sm py-4">לא נשלחו הודעות.</div>` : (p.sentMessages || []).map(m => `
+                <div class="bg-zinc-50 p-4 rounded-xl border border-zinc-100 mb-3">
+                    <div class="flex justify-between text-xs text-zinc-500 mb-2"><span>נשלח אליכם</span><span dir="ltr">${m.date}</span></div>
+                    <p class="text-zinc-700">${m.text}</p>
+                </div>`).join('');
+
+            return `
+                <div class="max-w-4xl mx-auto animate-in fade-in duration-500">
+                    <div class="mb-8"><h2 class="text-3xl font-bold text-zinc-900 mb-1">תיבת הודעות ותקשורת</h2><p class="text-zinc-500">צור קשר עם צוות ההדרכה וקבל עדכונים. מתעדכן אוטומטית.</p></div>
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div>
+                            <h3 class="font-bold text-lg mb-4 flex items-center gap-2"><i data-lucide="inbox" class="w-5 h-5 text-blue-500"></i> דואר נכנס</h3>
+                            <div id="student-inbox-list" class="space-y-2">${inboxHTML}</div>
+                        </div>
+                        <div>
+                            <div class="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm mb-6">
+                                <h3 class="font-bold mb-4">שליחת הודעה לצוות</h3>
+                                <form onsubmit="sendMessageToAdmin(event)">
+                                    <textarea id="student-msg-text" required rows="3" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 mb-3 resize-none focus:border-zinc-900 text-sm" placeholder="איך אפשר לעזור?"></textarea>
+                                    <button type="submit" class="w-full py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 flex justify-center gap-2"><i data-lucide="send" class="w-4 h-4"></i> שלח הודעה</button>
+                                </form>
+                            </div>
+                            <h3 class="font-bold text-sm text-zinc-500 mb-4 uppercase">היסטוריית שליחות</h3>
+                            <div class="space-y-2">${outboxHTML}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderAdminDashboardHTML = () => {
+            const usersDB = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]');
+            const incomingMessagesHTML = generateAdminIncomingMessagesHTML(usersDB);
+
+            return `
+                <div class="max-w-6xl mx-auto animate-in fade-in duration-500">
+                    <div class="mb-8"><h2 class="text-3xl font-bold text-zinc-900 mb-1">פאנל ניהול ומעקב</h2><p class="text-zinc-500">ניהול תלמידים רשומים ותיבת פניות.</p></div>
+                    <div class="grid lg:grid-cols-3 gap-8">
+                        <div class="lg:col-span-2 bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
+                            <div class="p-4 border-b border-zinc-100 bg-zinc-50 font-bold text-zinc-700">רשימת תלמידים (${usersDB.length})</div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-right">
+                                    <thead class="bg-zinc-50 border-b border-zinc-200 text-zinc-400 text-xs uppercase">
+                                        <tr><th class="p-4">שם וסיסמה</th><th class="p-4">התחברות</th><th class="p-4 text-center">פעולות</th></tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-zinc-100">
+                                        ${usersDB.map(u => `
+                                            <tr class="hover:bg-zinc-50 transition">
+                                                <td class="p-4"><div class="font-bold text-zinc-900">${u.name}</div><div class="font-mono text-xs text-zinc-400">${u.password}</div></td>
+                                                <td class="p-4 text-zinc-500 text-xs" dir="ltr">${u.lastLogin || '-'}</td>
+                                                <td class="p-4 flex justify-center gap-2">
+                                                    <button onclick="openAdminViewModal('${u.name}')" class="px-3 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-100" title="צפה בתיק"><i data-lucide="eye" class="w-4 h-4"></i></button>
+                                                    <button onclick="openAdminMessageModal('${u.name}')" class="px-3 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-zinc-800" title="שלח הודעה"><i data-lucide="message-square" class="w-4 h-4"></i></button>
+                                                </td>
+                                            </tr>
+                                        `).join('') || `<tr><td colspan="3" class="p-8 text-center text-zinc-500">אין משתמשים</td></tr>`}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="lg:col-span-1">
+                            <div class="bg-zinc-50/50 rounded-2xl border border-zinc-200 p-6">
+                                <h3 class="font-bold text-zinc-900 mb-4 flex items-center gap-2"><i data-lucide="inbox" class="w-5 h-5 text-zinc-400"></i> פניות מתלמידים (מתעדכן חי)</h3>
+                                <div id="admin-incoming-messages-container" class="max-h-[600px] overflow-y-auto pr-1">${incomingMessagesHTML}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const render = () => {
+            const app = document.getElementById('app'); const login = document.getElementById('login-container');
+            const main = document.getElementById('main-content'); const sidebar = document.getElementById('sidebar-container');
+
+            if (state.view === 'login') {
+                app.classList.add('hidden'); sidebar.classList.add('hidden'); login.classList.remove('hidden');
+                login.innerHTML = renderLoginHTML();
+            } else {
+                login.classList.add('hidden'); app.classList.remove('hidden'); sidebar.classList.remove('hidden');
+                sidebar.innerHTML = renderSidebarHTML();
+                
+                switch(state.view) {
+                    case 'admin_dashboard': main.innerHTML = renderAdminDashboardHTML(); break;
+                    case 'dashboard': main.innerHTML = renderDashboardHTML(); break;
+                    case 'calendar': main.innerHTML = renderCalendarHTML(); break;
+                    case 'tasks': main.innerHTML = renderTasksHTML(); break;
+                    case 'schedule': main.innerHTML = renderScheduleHTML(); break;
+                    case 'simulations': main.innerHTML = renderSimulationsHTML(); break;
+                    case 'calculator': main.innerHTML = renderCalculatorHTML(); if(state.calc) updateCalc('quant', state.calc.quant); break;
+                    case 'dictionary_words': main.innerHTML = renderDictionaryWordsHTML(); break;
+                    case 'dictionary_images': main.innerHTML = renderDictImagesHTML(); break;
+                    case 'dict_practice': main.innerHTML = renderDictPracticeHTML(); break;
+                    case 'messages': main.innerHTML = renderMessagesHTML(); break;
+                }
+            }
+            lucide.createIcons();
+            const typingInput = document.getElementById('typing-answer'); if(typingInput && !typingInput.disabled) typingInput.focus();
+        };
+
+        window.onload = initAuth;
+    </script>
+</body>
+</html>
