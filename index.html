@@ -3,16 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PsychoMaster | ניהול פסיכומטרי חכם</title>
+    <title>PsychoMaster | ניהול פסיכומטרי בענן</title>
     
     <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Firebase App (the core Firebase SDK) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <!-- Firebase Realtime Database -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap');
@@ -157,7 +162,7 @@
 
     <!-- Admin View User Modal -->
     <div id="admin-view-modal" class="fixed inset-0 z-[105] bg-zinc-900/40 backdrop-blur-sm hidden items-center justify-center p-4">
-        <div class="bg-white rounded-[2rem] p-8 max-w-2xl w-full shadow-2xl max-h-[90vh] flex flex-col">
+        <div class="bg-white rounded-[2rem] p-8 max-w-3xl w-full shadow-2xl max-h-[90vh] flex flex-col">
             <div class="flex justify-between items-center mb-6 border-b border-zinc-100 pb-4">
                 <div>
                     <h3 id="view-user-name" class="text-2xl font-bold text-zinc-900 tracking-tight">תיק תלמיד</h3>
@@ -195,12 +200,30 @@
     </div>
 
     <script>
+        // ==============================================================
+        // 🚀 הגדרות FIREBASE - חיבור המערכת לענן (Realtime Database) 🚀
+        // ==============================================================
+        // כדי לחבר את המערכת לאינטרנט אמיתי (כדי שהאדמין והתלמיד יעבדו באמת ממחשבים שונים),
+        // עליך לפתוח פרויקט בחינם ב-Firebase ולהדביק את ההגדרות שלך כאן למטה.
+        // כל עוד המשתנים כאן ריקים, המערכת מזהה זאת ועובדת אוטומטית במצב Offline מקומי!
+        const firebaseConfig = {
+            apiKey: "AIzaSyD06m76JI-z96hoV8n09sNzuL7eCAWvxGM",
+            authDomain: "psichmtrey.firebaseapp.com",
+            databaseURL: "https://psichmtrey-default-rtdb.firebaseio.com",
+            projectId: "psichmtrey",
+            storageBucket: "psichmtrey.firebasestorage.app",
+            messagingSenderId: "812430838886",
+            appId: "1:812430838886:web:80a8c77a9626942db971a7"
+        };
+        const isFirebaseConfigured = firebaseConfig.apiKey !== "";
+        if (isFirebaseConfigured) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        // ==============================================================
+
         // מניעת רענון בטעות
         window.addEventListener('beforeunload', function (e) {
-            if (state.view !== 'login') {
-                e.preventDefault();
-                e.returnValue = ''; // הדפדפן מציג הודעת אזהרה דיפולטיבית
-            }
+            if (state.view !== 'login') { e.preventDefault(); e.returnValue = ''; }
         });
 
         const USER_STATS_TEMPLATE = {
@@ -209,21 +232,60 @@
             sentMessages: [], // Outbox to admin
             courseSettings: { isTakingCourse: false, weeklyClasses: [] },
             todos: [], 
+            homework: [], 
             calendarEvents: [], 
             simulations: [], 
             customDictionary: { words: [], images: [] }
         };
 
         const state = {
-            view: 'login', profile: null, isAdmin: false,
+            view: 'login', profile: null, isAdmin: false, adminUsersCache: [],
             calc: { quant: 100, verbal: 100, english: 100 },
-            dict: { practiceMode: null, practiceQueue: [], currentPracticeIndex: 0, practiceScore: 0, showAnswer: false },
+            dict: { practiceMode: null, practiceLang: 'he', practiceQueue: [], currentPracticeIndex: 0, practiceScore: 0, showAnswer: false, isFlipped: false },
             activeTaskTimer: { id: null, interval: null, timeLeft: 0, totalDuration: 0 },
             simTimer: { interval: null, timeLeft: 20 * 60, isRunning: false, isFullscreen: false },
             pomodoro: { interval: null, timeLeft: 25 * 60, isRunning: false, mode: 'work' },
             editingTaskId: null, editingClassId: null, targetUserForMessage: null,
+            adminViewingUser: null, adminViewTab: 'info',
             calendarDate: new Date(),
-            pollingInterval: null
+            pollingInterval: null,
+            expandedMenus: {}
+        };
+
+        // --------------------------------------------------------
+        // Database Wrapper - מנהל אוטומטית שמירה לענן או למחשב המקומי
+        // --------------------------------------------------------
+        const DB = {
+            saveUser: (userObj) => {
+                if (isFirebaseConfigured) {
+                    firebase.database().ref('users/' + userObj.name).set(userObj);
+                } else {
+                    let users = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]');
+                    const idx = users.findIndex(u => u.name === userObj.name);
+                    if (idx > -1) users[idx] = userObj; else users.push(userObj);
+                    localStorage.setItem('psychoProUsersDB', JSON.stringify(users));
+                    state.adminUsersCache = users; // Update local cache instantly
+                }
+            },
+            deleteUser: (username) => {
+                if (isFirebaseConfigured) {
+                    firebase.database().ref('users/' + username).remove();
+                } else {
+                    let users = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]');
+                    users = users.filter(u => u.name !== username);
+                    localStorage.setItem('psychoProUsersDB', JSON.stringify(users));
+                    state.adminUsersCache = users;
+                }
+            },
+            getUserAsync: async (username) => {
+                if (isFirebaseConfigured) {
+                    const snap = await firebase.database().ref('users/' + username).once('value');
+                    return snap.val();
+                } else {
+                    const users = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]');
+                    return users.find(u => u.name === username);
+                }
+            }
         };
 
         const calculatePsychoScore = (q, v, e) => {
@@ -267,27 +329,63 @@
             setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
         }
 
-        function startPolling() {
-            if (state.pollingInterval) clearInterval(state.pollingInterval);
-            state.pollingInterval = setInterval(() => {
-                if (state.view === 'messages' || state.view === 'admin_dashboard') {
+        function startPollingOrListening() {
+            if (state.pollingInterval) { clearInterval(state.pollingInterval); state.pollingInterval = null; }
+            
+            if (isFirebaseConfigured) {
+                if (state.isAdmin) {
+                    firebase.database().ref('users').on('value', (snapshot) => {
+                        const val = snapshot.val() || {};
+                        state.adminUsersCache = Object.values(val);
+                        if (state.view === 'admin_dashboard' || state.adminViewingUser) render();
+                    });
+                } else {
+                    firebase.database().ref('users/' + state.profile.name).on('value', (snapshot) => {
+                        const freshMe = snapshot.val();
+                        if (freshMe) {
+                            state.profile.messages = freshMe.messages || [];
+                            state.profile.sentMessages = freshMe.sentMessages || [];
+                            localStorage.setItem('psychoProPremiumSession', JSON.stringify(state.profile));
+                            if (state.view === 'messages') {
+                                const chatContainer = document.getElementById('student-unified-chat');
+                                if (chatContainer) {
+                                    chatContainer.innerHTML = generateUnifiedChatHTML(state.profile.sentMessages, state.profile.messages, false);
+                                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                                }
+                            }
+                        }
+                    });
+                }
+            } else {
+                // מצב אופליין - דוגם מתוך הזיכרון המקומי
+                state.pollingInterval = setInterval(() => {
                     const usersDB = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]');
-                    
-                    if (state.isAdmin && state.view === 'admin_dashboard') {
-                        const container = document.getElementById('admin-incoming-messages-container');
-                        if (container) container.innerHTML = generateAdminIncomingMessagesHTML(usersDB);
-                    } 
-                    else if (!state.isAdmin && state.view === 'messages') {
+                    if (state.isAdmin) {
+                        state.adminUsersCache = usersDB;
+                        if (state.view === 'admin_dashboard') {
+                            const container = document.getElementById('admin-incoming-messages-container');
+                            if (container) container.innerHTML = generateAdminIncomingMessagesHTML(state.adminUsersCache);
+                        }
+                        if (state.adminViewingUser && state.adminViewTab === 'chat') {
+                            const u = state.adminUsersCache.find(x => x.name === state.adminViewingUser);
+                            if(u) {
+                                const chatBox = document.getElementById('admin-chat-box');
+                                if(chatBox) chatBox.innerHTML = generateUnifiedChatHTML(u.sentMessages, u.messages, true);
+                            }
+                        }
+                    } else {
                         const freshMe = usersDB.find(u => u.name === state.profile.name);
                         if (freshMe) {
                             state.profile.messages = freshMe.messages || [];
-                            saveProfile(state.profile, true); // silent save
-                            const inboxContainer = document.getElementById('student-inbox-list');
-                            if (inboxContainer) inboxContainer.innerHTML = generateStudentInboxHTML(state.profile.messages);
+                            localStorage.setItem('psychoProPremiumSession', JSON.stringify(state.profile));
+                            if (state.view === 'messages') {
+                                const chatContainer = document.getElementById('student-unified-chat');
+                                if (chatContainer) chatContainer.innerHTML = generateUnifiedChatHTML(state.profile.sentMessages, state.profile.messages, false);
+                            }
                         }
                     }
-                }
-            }, 2000);
+                }, 2000);
+            }
         }
 
         function initAuth() {
@@ -296,15 +394,19 @@
             if (savedSession) {
                 try {
                     const session = JSON.parse(savedSession);
-                    if (session.isAdmin) { state.isAdmin = true; state.view = 'admin_dashboard'; } 
+                    if (session.isAdmin) { 
+                        state.isAdmin = true; state.view = 'admin_dashboard'; 
+                        if (!isFirebaseConfigured) state.adminUsersCache = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]');
+                    } 
                     else {
                         state.profile = { ...USER_STATS_TEMPLATE, ...session, 
                             customDictionary: session.customDictionary || USER_STATS_TEMPLATE.customDictionary,
-                            calendarEvents: session.calendarEvents || [], sentMessages: session.sentMessages || []
+                            calendarEvents: session.calendarEvents || [], sentMessages: session.sentMessages || [],
+                            homework: session.homework || []
                         };
                         state.view = 'dashboard';
                     }
-                    startPolling();
+                    startPollingOrListening();
                 } catch(e) { state.profile = JSON.parse(JSON.stringify(USER_STATS_TEMPLATE)); }
             } else { state.profile = JSON.parse(JSON.stringify(USER_STATS_TEMPLATE)); }
             render();
@@ -313,12 +415,7 @@
         window.saveProfile = (updatedProfile, silent = false) => {
             state.profile = updatedProfile;
             localStorage.setItem('psychoProPremiumSession', JSON.stringify(updatedProfile));
-            let usersDB = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]');
-            const userIndex = usersDB.findIndex(u => u.name === updatedProfile.name);
-            if (userIndex > -1) {
-                usersDB[userIndex] = { ...usersDB[userIndex], ...updatedProfile };
-                localStorage.setItem('psychoProUsersDB', JSON.stringify(usersDB));
-            }
+            DB.saveUser(updatedProfile);
         };
 
         window.switchView = (viewName) => {
@@ -327,7 +424,12 @@
             state.view = viewName; window.scrollTo(0, 0); render();
         };
 
-        window.handleLogin = (event) => {
+        window.toggleMenu = (title) => {
+            state.expandedMenus[title] = !state.expandedMenus[title];
+            render();
+        };
+
+        window.handleLogin = async (event) => {
             event.preventDefault();
             const username = document.getElementById('login-username').value.trim();
             const password = document.getElementById('login-password').value;
@@ -337,34 +439,172 @@
 
             if (username === 'admin' && password === 'admin123') {
                 state.isAdmin = true; localStorage.setItem('psychoProPremiumSession', JSON.stringify({ isAdmin: true, name: 'מנהלת מערכת' }));
-                startPolling(); switchView('admin_dashboard'); return;
+                if (!isFirebaseConfigured) state.adminUsersCache = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]');
+                startPollingOrListening(); switchView('admin_dashboard'); return;
             }
 
-            let usersDB = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]');
-            let existingUser = usersDB.find(u => u.name === username);
+            let existingUser = await DB.getUserAsync(username);
 
             if (existingUser) {
                 if (existingUser.password !== password) { errorDiv.textContent = 'סיסמה שגויה למשתמש קיים.'; errorDiv.classList.remove('hidden'); return; }
                 existingUser.lastLogin = now;
-                localStorage.setItem('psychoProUsersDB', JSON.stringify(usersDB));
-                state.profile = { ...USER_STATS_TEMPLATE, ...existingUser, customDictionary: existingUser.customDictionary || USER_STATS_TEMPLATE.customDictionary, calendarEvents: existingUser.calendarEvents || [], sentMessages: existingUser.sentMessages || [] };
+                state.profile = { ...USER_STATS_TEMPLATE, ...existingUser, customDictionary: existingUser.customDictionary || USER_STATS_TEMPLATE.customDictionary, calendarEvents: existingUser.calendarEvents || [], sentMessages: existingUser.sentMessages || [], homework: existingUser.homework || [] };
+                DB.saveUser(state.profile);
             } else {
                 const newUser = JSON.parse(JSON.stringify(USER_STATS_TEMPLATE));
                 newUser.name = username; newUser.password = password; newUser.lastLogin = now; newUser.joinDate = now;
-                usersDB.push(newUser); localStorage.setItem('psychoProUsersDB', JSON.stringify(usersDB));
                 state.profile = newUser;
+                DB.saveUser(newUser);
             }
 
             state.isAdmin = false; localStorage.setItem('psychoProPremiumSession', JSON.stringify(state.profile));
-            startPolling(); switchView('dashboard');
+            startPollingOrListening(); switchView('dashboard');
         };
 
         window.handleLogout = () => {
             state.profile = JSON.parse(JSON.stringify(USER_STATS_TEMPLATE)); state.isAdmin = false;
             if (state.pollingInterval) clearInterval(state.pollingInterval);
+            if (isFirebaseConfigured) firebase.database().ref().off(); // Turn off Firebase listeners
             if (state.pomodoro.interval) clearInterval(state.pomodoro.interval);
             localStorage.removeItem('psychoProPremiumSession'); switchView('login');
         };
+
+        const generateUnifiedChatHTML = (sentMessages, receivedMessages, isAdminView) => {
+            const allMsgs = [
+                ...(sentMessages || []).map(m => ({ ...m, isSentByStudent: true })),
+                ...(receivedMessages || []).map(m => ({ ...m, isSentByStudent: false }))
+            ].sort((a, b) => a.id - b.id); // ישן למעלה, חדש למטה
+
+            if (allMsgs.length === 0) return `<div class="text-zinc-400 text-sm text-center py-10">אין הודעות. תחילת שיחה חדשה.</div>`;
+
+            return allMsgs.map(m => {
+                const isMyBubble = isAdminView ? !m.isSentByStudent : m.isSentByStudent;
+                
+                if (isMyBubble) {
+                    return `
+                        <div class="flex justify-end mb-4 animate-in fade-in slide-in-from-bottom-2">
+                            <div class="bg-zinc-900 text-white rounded-2xl rounded-tl-sm px-4 py-3 max-w-[80%] shadow-sm">
+                                <p class="text-sm">${m.text}</p>
+                                <div class="text-[10px] text-zinc-400 mt-1 text-left" dir="ltr">${m.date}</div>
+                            </div>
+                        </div>`;
+                } else {
+                    return `
+                        <div class="flex justify-start mb-4 animate-in fade-in slide-in-from-bottom-2">
+                            <div class="bg-white border border-zinc-200 text-zinc-800 rounded-2xl rounded-tr-sm px-4 py-3 max-w-[80%] shadow-sm">
+                                <p class="text-sm font-bold mb-1 ${isAdminView ? 'text-blue-600' : 'text-zinc-500'} text-xs">${isAdminView ? 'תלמיד' : 'צוות הדרכה'}</p>
+                                <p class="text-sm">${m.text}</p>
+                                <div class="text-[10px] text-zinc-400 mt-1 text-right" dir="ltr">${m.date}</div>
+                            </div>
+                        </div>`;
+                }
+            }).join('');
+        };
+
+        const generateAdminIncomingMessagesHTML = (usersDB) => {
+            let allIncoming = [];
+            usersDB.forEach(u => {
+                if(u.sentMessages && u.sentMessages.length > 0) {
+                    u.sentMessages.forEach(m => { allIncoming.push({ ...m, username: u.name }); });
+                }
+            });
+            
+            allIncoming.sort((a,b) => b.id - a.id);
+
+            if (allIncoming.length === 0) return '<div class="text-zinc-500 text-sm">אין הודעות חדשות מתלמידים.</div>';
+
+            let html = '';
+            allIncoming.forEach(m => {
+                html += `
+                    <div class="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm mb-3 hover:border-zinc-300 transition cursor-pointer" onclick="openAdminViewModal('${m.username}', 'chat')">
+                        <div class="flex justify-between items-center mb-2">
+                            <div class="text-sm font-bold text-blue-600">מאת: ${m.username}</div>
+                            <div class="text-xs text-zinc-400" dir="ltr">${m.date}</div>
+                        </div>
+                        <p class="text-zinc-800 text-sm mb-3 line-clamp-2">${m.text}</p>
+                        <div class="flex gap-2">
+                            <button onclick="event.stopPropagation(); openAdminMessageModal('${m.username}')" class="text-xs font-bold text-white bg-zinc-900 px-3 py-1.5 rounded-lg transition hover:bg-zinc-800">השב מהיר</button>
+                            <button class="text-xs font-bold text-zinc-600 bg-zinc-100 px-3 py-1.5 rounded-lg transition hover:bg-zinc-200">לכל השיחה</button>
+                        </div>
+                    </div>`;
+            });
+            return html;
+        };
+
+        window.switchAdminTab = (tab) => {
+            state.adminViewTab = tab;
+            document.getElementById('tab-btn-info').classList.toggle('border-zinc-900', tab === 'info');
+            document.getElementById('tab-btn-info').classList.toggle('text-zinc-900', tab === 'info');
+            document.getElementById('tab-btn-info').classList.toggle('border-transparent', tab !== 'info');
+            document.getElementById('tab-btn-info').classList.toggle('text-zinc-500', tab !== 'info');
+
+            document.getElementById('tab-btn-chat').classList.toggle('border-zinc-900', tab === 'chat');
+            document.getElementById('tab-btn-chat').classList.toggle('text-zinc-900', tab === 'chat');
+            document.getElementById('tab-btn-chat').classList.toggle('border-transparent', tab !== 'chat');
+            document.getElementById('tab-btn-chat').classList.toggle('text-zinc-500', tab !== 'chat');
+
+            const user = state.adminUsersCache.find(u => u.name === state.adminViewingUser); 
+            if(!user) return;
+
+            const contentDiv = document.getElementById('admin-tab-content');
+            if (tab === 'info') {
+                let contentHTML = `
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-zinc-50 p-4 rounded-xl border border-zinc-100 text-center"><div class="text-xs font-bold text-zinc-500 mb-1">סימולציות שבוצעו</div><div class="text-3xl font-black">${(user.simulations || []).length}</div></div>
+                        <div class="bg-zinc-50 p-4 rounded-xl border border-zinc-100 text-center"><div class="text-xs font-bold text-zinc-500 mb-1">מילים במילון</div><div class="text-3xl font-black">${(user.customDictionary?.words || []).length}</div></div>
+                    </div>`;
+                if(user.simulations && user.simulations.length > 0) {
+                    contentHTML += `<h4 class="font-bold text-zinc-900 border-b border-zinc-200 pb-2 mb-3">סימולציות אחרונות</h4><div class="space-y-3">`;
+                    user.simulations.slice(0,3).forEach(sim => { contentHTML += `<div class="bg-white p-3 rounded-xl border border-zinc-200 text-sm flex justify-between items-center"><div><strong class="text-zinc-900">${sim.name}</strong> <span class="text-zinc-500">(${sim.date})</span></div><div class="flex gap-3 text-xs font-mono font-bold"><span class="text-blue-600">רב: ${sim.finalScores?.multi || '-'}</span></div></div>`; });
+                    contentHTML += `</div>`;
+                }
+                contentDiv.innerHTML = contentHTML;
+            } else if (tab === 'chat') {
+                contentDiv.innerHTML = `
+                    <div class="bg-zinc-50 rounded-2xl border border-zinc-200 p-4 mb-4 h-[400px] overflow-y-auto flex flex-col" id="admin-chat-box">
+                        ${generateUnifiedChatHTML(user.sentMessages, user.messages, true)}
+                    </div>
+                    <form onsubmit="event.preventDefault(); sendAdminMessageFromChat()" class="flex gap-2">
+                        <input type="text" id="admin-chat-input" class="flex-1 bg-white border border-zinc-200 rounded-xl px-4 py-3 focus:border-zinc-900" placeholder="הקלד תגובה לתלמיד...">
+                        <button type="submit" class="px-6 py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800"><i data-lucide="send" class="w-5 h-5"></i></button>
+                    </form>
+                `;
+                setTimeout(() => { const chatBox = document.getElementById('admin-chat-box'); if(chatBox) chatBox.scrollTop = chatBox.scrollHeight; lucide.createIcons(); }, 10);
+            }
+        };
+
+        window.sendAdminMessageFromChat = () => {
+            const input = document.getElementById('admin-chat-input');
+            const text = input.value.trim();
+            if(!text || !state.adminViewingUser) return;
+
+            let user = state.adminUsersCache.find(u => u.name === state.adminViewingUser);
+            if (user) {
+                if(!user.messages) user.messages = [];
+                user.messages.push({ id: Date.now(), text: text, isRead: false, date: new Date().toLocaleString('he-IL') });
+                DB.saveUser(user);
+                input.value = '';
+                if(!isFirebaseConfigured) switchAdminTab('chat'); // Refresh local
+            }
+        };
+
+        window.openAdminViewModal = (username, defaultTab = 'info') => {
+            state.adminViewingUser = username; state.adminViewTab = defaultTab;
+            const user = state.adminUsersCache.find(u => u.name === username); if(!user) return;
+            document.getElementById('view-user-name').textContent = `תיק תלמיד: ${user.name}`; document.getElementById('view-user-login').textContent = `התחברות אחרונה: ${user.lastLogin || 'לא ידוע'}`;
+            
+            document.getElementById('admin-view-content').innerHTML = `
+                <div class="flex gap-4 border-b border-zinc-200 mb-6 pb-2">
+                    <button onclick="switchAdminTab('info')" id="tab-btn-info" class="font-bold pb-2 border-b-2 border-zinc-900 text-zinc-900 transition">מידע ונתונים</button>
+                    <button onclick="switchAdminTab('chat')" id="tab-btn-chat" class="font-bold pb-2 border-b-2 border-transparent text-zinc-500 hover:text-zinc-700 transition">היסטוריית שיחות</button>
+                </div>
+                <div id="admin-tab-content"></div>
+            `;
+            
+            switchAdminTab(defaultTab);
+            document.getElementById('admin-view-modal').classList.remove('hidden'); document.getElementById('admin-view-modal').classList.add('flex');
+        };
+        window.closeAdminViewModal = () => { document.getElementById('admin-view-modal').classList.add('hidden'); document.getElementById('admin-view-modal').classList.remove('flex'); state.adminViewingUser = null; };
 
         window.openTaskModal = (editId = null) => {
             state.editingTaskId = editId;
@@ -455,7 +695,7 @@
                         } else {
                             state.pomodoro.mode = 'work'; state.pomodoro.timeLeft = 25 * 60; showAlert('חזרה ללמידה!', 'ההפסקה נגמרה. זמן לפוקוס.', 'brain');
                         }
-                        window.togglePomodoro(); // pause it automatically
+                        window.togglePomodoro();
                     }
                 }, 1000);
             }
@@ -467,15 +707,16 @@
         window.saveWeeklyClass = (e) => {
             e.preventDefault();
             const dayOfWeek = parseInt(document.getElementById('class-day').value); const startTime = document.getElementById('class-start-time').value; const endTime = document.getElementById('class-end-time').value; const isZoom = document.getElementById('class-zoom').checked;
+            const title = document.getElementById('class-title').value.trim();
             if (startTime && endTime) {
                 if (startTime >= endTime) return showAlert('שגיאה בזמנים', 'שעת הסיום חייבת להיות אחרי שעת ההתחלה.', 'alert-circle');
                 const updatedProfile = { ...state.profile };
                 if (state.editingClassId) {
                     const idx = updatedProfile.courseSettings.weeklyClasses.findIndex(c => c.id === state.editingClassId);
-                    if (idx > -1) updatedProfile.courseSettings.weeklyClasses[idx] = { id: state.editingClassId, dayOfWeek, startTime, endTime, isZoom };
+                    if (idx > -1) updatedProfile.courseSettings.weeklyClasses[idx] = { id: state.editingClassId, dayOfWeek, startTime, endTime, isZoom, title };
                     state.editingClassId = null;
                 } else {
-                    updatedProfile.courseSettings.weeklyClasses.push({ id: Date.now(), dayOfWeek, startTime, endTime, isZoom });
+                    updatedProfile.courseSettings.weeklyClasses.push({ id: Date.now(), dayOfWeek, startTime, endTime, isZoom, title });
                 }
                 updatedProfile.courseSettings.weeklyClasses.sort((a,b) => a.dayOfWeek !== b.dayOfWeek ? a.dayOfWeek - b.dayOfWeek : a.startTime.localeCompare(b.startTime)); saveProfile(updatedProfile); render();
             }
@@ -487,12 +728,35 @@
                 setTimeout(() => {
                     document.getElementById('class-day').value = cls.dayOfWeek; document.getElementById('class-start-time').value = cls.startTime;
                     document.getElementById('class-end-time').value = cls.endTime || ''; document.getElementById('class-zoom').checked = cls.isZoom;
+                    document.getElementById('class-title').value = cls.title || '';
                     document.getElementById('class-form-title').textContent = 'עריכת שיעור'; document.getElementById('class-form-btn').textContent = 'שמור שינויים';
                 }, 0);
             }
         };
         window.cancelEditClass = () => { state.editingClassId = null; render(); };
         window.deleteWeeklyClass = (id) => { const updatedProfile = { ...state.profile }; updatedProfile.courseSettings.weeklyClasses = updatedProfile.courseSettings.weeklyClasses.filter(c => c.id !== id); if (state.editingClassId === id) state.editingClassId = null; saveProfile(updatedProfile); render(); };
+
+        window.addHomework = (e) => {
+            e.preventDefault();
+            const subject = document.getElementById('hw-subject').value.trim();
+            const pages = document.getElementById('hw-pages').value.trim();
+            const dueDate = document.getElementById('hw-date').value;
+            if(subject && pages) {
+                const updatedProfile = { ...state.profile };
+                if(!updatedProfile.homework) updatedProfile.homework = [];
+                updatedProfile.homework.push({ id: Date.now(), subject, pages, dueDate, done: false });
+                saveProfile(updatedProfile); render();
+            }
+        };
+        window.toggleHomework = (id) => {
+            const updatedProfile = { ...state.profile };
+            const hw = updatedProfile.homework.find(h => h.id === id);
+            if(hw) { hw.done = !hw.done; saveProfile(updatedProfile); render(); }
+        };
+        window.deleteHomework = (id) => {
+            const updatedProfile = { ...state.profile };
+            updatedProfile.homework = updatedProfile.homework.filter(h => h.id !== id); saveProfile(updatedProfile); render();
+        };
 
         window.changeCalendarMonth = (offset) => { state.calendarDate.setMonth(state.calendarDate.getMonth() + offset); render(); };
         window.openEventModal = (dateStr = null) => {
@@ -565,12 +829,40 @@
         window.deleteDictImage = (id) => { const updatedProfile = { ...state.profile }; updatedProfile.customDictionary.images = updatedProfile.customDictionary.images.filter(img => img.id !== id); saveProfile(updatedProfile); render(); };
         window.openImagePreview = (src) => { const w = window.open(""); w.document.write(`<img src="${src}" style="max-width: 100%; max-height: 100vh; display: block; margin: 0 auto;">`); };
 
-        window.startDictPractice = (mode) => {
-            const words = state.profile.customDictionary.words;
+        window.startDictPractice = (mode, lang) => {
+            const allWords = state.profile.customDictionary.words || [];
+            const words = allWords.filter(w => w.lang === lang);
+            
             if (mode === 'american' && words.length < 4) return showAlert('שגיאה', 'יש להזין לפחות 4 מילים במילון לתרגול אמריקאי.', 'alert-triangle');
             if (words.length === 0) return showAlert('שגיאה', 'המילון ריק.', 'alert-triangle');
-            state.dict = { practiceMode: mode, practiceQueue: [...words].sort(() => 0.5 - Math.random()), currentPracticeIndex: 0, practiceScore: 0, showAnswer: false }; switchView('dict_practice');
+            
+            state.dict = { 
+                practiceMode: mode, practiceLang: lang, 
+                practiceQueue: [...words].sort(() => 0.5 - Math.random()), 
+                totalWordsInPractice: words.length,
+                currentPracticeIndex: 0, practiceScore: 0, showAnswer: false, isFlipped: false 
+            }; 
+            switchView('dict_practice');
         };
+
+        window.flipFlashcard = () => { state.dict.isFlipped = true; render(); };
+        window.markFlashcard = (knewIt) => {
+            if(knewIt) {
+                state.dict.practiceQueue.splice(state.dict.currentPracticeIndex, 1);
+                state.dict.practiceScore++;
+            } else {
+                state.dict.currentPracticeIndex++;
+            }
+            
+            if(state.dict.practiceQueue.length === 0) {
+                 finishDictPractice();
+            } else {
+                 if(state.dict.currentPracticeIndex >= state.dict.practiceQueue.length) state.dict.currentPracticeIndex = 0;
+                 state.dict.isFlipped = false;
+                 render();
+            }
+        };
+
         window.checkAmericanAnswer = (selectedMeaning) => {
             if (state.dict.showAnswer) return; const isCorrect = selectedMeaning === state.dict.practiceQueue[state.dict.currentPracticeIndex].meaning;
             if(isCorrect) state.dict.practiceScore++; state.dict.showAnswer = true; state.dict.lastAnswerCorrect = isCorrect; render();
@@ -579,50 +871,46 @@
             e.preventDefault(); if (state.dict.showAnswer) return; const input = document.getElementById('typing-answer').value.trim(); const isCorrect = input === state.dict.practiceQueue[state.dict.currentPracticeIndex].meaning;
             if(isCorrect) state.dict.practiceScore++; state.dict.showAnswer = true; state.dict.lastAnswerCorrect = isCorrect; render();
         };
-        window.nextPracticeWord = () => { state.dict.currentPracticeIndex++; state.dict.showAnswer = false; render(); };
-        window.finishDictPractice = () => { showAlert('סיום', `ענית נכונה על ${state.dict.practiceScore} מתוך ${state.dict.practiceQueue.length} מילים.`, 'award'); switchView('dictionary_words'); };
+        window.nextPracticeWord = () => { 
+            state.dict.practiceQueue.splice(state.dict.currentPracticeIndex, 1);
+            state.dict.showAnswer = false; 
+            if(state.dict.practiceQueue.length === 0) finishDictPractice();
+            else render(); 
+        };
+        window.finishDictPractice = () => { 
+            let msg = state.dict.practiceMode === 'flashcards' ? 'סיימת לעבור על כל הכרטיסיות!' : `ענית נכונה על ${state.dict.practiceScore} מתוך ${state.dict.totalWordsInPractice} מילים.`;
+            showAlert('סיום תרגול', msg, 'award'); 
+            switchView(`dict_${state.dict.practiceLang}`); 
+        };
 
         window.sendMessageToAdmin = (e) => {
             e.preventDefault(); const text = document.getElementById('student-msg-text').value.trim();
             if(text) {
                 const updatedProfile = { ...state.profile }; updatedProfile.sentMessages.push({ id: Date.now(), text, date: new Date().toLocaleString('he-IL') });
-                saveProfile(updatedProfile); render(); showAlert('נשלח בהצלחה', 'ההודעה נשלחה לצוות ההדרכה.', 'send');
+                saveProfile(updatedProfile); 
+                document.getElementById('student-msg-text').value = '';
+                showAlert('נשלח בהצלחה', 'ההודעה נשלחה לצוות ההדרכה.', 'send');
+                if(!isFirebaseConfigured) render();
             }
         };
         
         window.openAdminMessageModal = (username) => { state.targetUserForMessage = username; document.getElementById('admin-message-target').textContent = `נמען: ${username}`; document.getElementById('admin-message-text').value = ''; document.getElementById('admin-message-modal').classList.remove('hidden'); document.getElementById('admin-message-modal').classList.add('flex'); };
         window.closeAdminMessageModal = () => { document.getElementById('admin-message-modal').classList.add('hidden'); document.getElementById('admin-message-modal').classList.remove('flex'); state.targetUserForMessage = null; };
+        
         window.sendAdminMessage = () => {
             const text = document.getElementById('admin-message-text').value.trim(); if(!text || !state.targetUserForMessage) return;
-            let usersDB = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]'); const userIndex = usersDB.findIndex(u => u.name === state.targetUserForMessage);
-            if (userIndex > -1) {
-                if(!usersDB[userIndex].messages) usersDB[userIndex].messages = [];
-                usersDB[userIndex].messages.push({ id: Date.now(), text: text, isRead: false, date: new Date().toLocaleString('he-IL') });
-                localStorage.setItem('psychoProUsersDB', JSON.stringify(usersDB)); showAlert('נשלח', `ההודעה נשלחה ל-${state.targetUserForMessage}.`, 'check');
+            const user = state.adminUsersCache.find(u => u.name === state.targetUserForMessage);
+            if (user) {
+                if(!user.messages) user.messages = [];
+                user.messages.push({ id: Date.now(), text: text, isRead: false, date: new Date().toLocaleString('he-IL') });
+                DB.saveUser(user);
+                showAlert('נשלח', `ההודעה נשלחה ל-${state.targetUserForMessage}.`, 'check');
             }
-            closeAdminMessageModal(); render();
+            closeAdminMessageModal(); if(!isFirebaseConfigured) render();
         };
-
-        window.openAdminViewModal = (username) => {
-            let usersDB = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]'); const user = usersDB.find(u => u.name === username); if(!user) return;
-            document.getElementById('view-user-name').textContent = `תיק תלמיד: ${user.name}`; document.getElementById('view-user-login').textContent = `התחברות אחרונה: ${user.lastLogin || 'לא ידוע'}`;
-            let contentHTML = `
-                <div class="grid grid-cols-2 gap-4 mb-6">
-                    <div class="bg-zinc-50 p-4 rounded-xl border border-zinc-100 text-center"><div class="text-xs font-bold text-zinc-500 mb-1">סימולציות שבוצעו</div><div class="text-3xl font-black">${(user.simulations || []).length}</div></div>
-                    <div class="bg-zinc-50 p-4 rounded-xl border border-zinc-100 text-center"><div class="text-xs font-bold text-zinc-500 mb-1">מילים במילון</div><div class="text-3xl font-black">${(user.customDictionary?.words || []).length}</div></div>
-                </div>`;
-            if(user.simulations && user.simulations.length > 0) {
-                contentHTML += `<h4 class="font-bold text-zinc-900 border-b border-zinc-200 pb-2 mb-3">סימולציות אחרונות</h4><div class="space-y-3">`;
-                user.simulations.slice(0,3).forEach(sim => { contentHTML += `<div class="bg-white p-3 rounded-xl border border-zinc-200 text-sm flex justify-between items-center"><div><strong class="text-zinc-900">${sim.name}</strong> <span class="text-zinc-500">(${sim.date})</span></div><div class="flex gap-3 text-xs font-mono font-bold"><span class="text-blue-600">רב: ${sim.finalScores?.multi || '-'}</span></div></div>`; });
-                contentHTML += `</div>`;
-            }
-            document.getElementById('admin-view-content').innerHTML = contentHTML; document.getElementById('admin-view-modal').classList.remove('hidden'); document.getElementById('admin-view-modal').classList.add('flex');
-        };
-        window.closeAdminViewModal = () => { document.getElementById('admin-view-modal').classList.add('hidden'); document.getElementById('admin-view-modal').classList.remove('flex'); };
 
         window.openAdminEditUserModal = (username) => {
-            let usersDB = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]');
-            const user = usersDB.find(u => u.name === username);
+            const user = state.adminUsersCache.find(u => u.name === username);
             if (!user) return;
             document.getElementById('edit-user-original-name').value = user.name;
             document.getElementById('edit-user-name').value = user.name;
@@ -642,66 +930,32 @@
             const newPassword = document.getElementById('edit-user-password').value;
 
             if (!newName || newPassword.length < 4) {
-                showAlert('שגיאה', 'שם המשתמש לא יכול להיות ריק והסיסמה חייבת להיות לפחות 4 תווים.', 'alert-triangle');
-                return;
+                showAlert('שגיאה', 'שם המשתמש לא יכול להיות ריק והסיסמה חייבת להיות לפחות 4 תווים.', 'alert-triangle'); return;
             }
 
-            let usersDB = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]');
-            const userIndex = usersDB.findIndex(u => u.name === originalName);
-
+            const userIndex = state.adminUsersCache.findIndex(u => u.name === originalName);
             if (userIndex > -1) {
-                if (originalName !== newName && usersDB.some(u => u.name === newName)) {
-                    showAlert('שגיאה', 'שם המשתמש החדש כבר קיים במערכת.', 'alert-triangle');
-                    return;
+                if (originalName !== newName && state.adminUsersCache.some(u => u.name === newName)) {
+                    showAlert('שגיאה', 'שם המשתמש החדש כבר קיים במערכת.', 'alert-triangle'); return;
                 }
-                usersDB[userIndex].name = newName;
-                usersDB[userIndex].password = newPassword;
-                localStorage.setItem('psychoProUsersDB', JSON.stringify(usersDB));
+                let userObj = state.adminUsersCache[userIndex];
+                userObj.name = newName; userObj.password = newPassword;
+
+                if (originalName !== newName) DB.deleteUser(originalName);
+                DB.saveUser(userObj);
+
                 showAlert('הצלחה', 'פרטי המשתמש עודכנו בהצלחה.', 'check-circle');
-                closeAdminEditUserModal();
-                render();
+                closeAdminEditUserModal(); if(!isFirebaseConfigured) render();
             }
         };
 
         window.deleteAdminUser = () => {
             const username = document.getElementById('edit-user-original-name').value;
-            if (confirm(`האם אתה בטוח שברצונך למחוק את המשתמש "${username}" לצמיתות? פעולה זו תמחק את כל הנתונים שלו (סימולציות, מילון, משימות) ואינה ניתנת לביטול.`)) {
-                let usersDB = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]');
-                usersDB = usersDB.filter(u => u.name !== username);
-                localStorage.setItem('psychoProUsersDB', JSON.stringify(usersDB));
+            if (confirm(`האם אתה בטוח שברצונך למחוק את המשתמש "${username}" לצמיתות? פעולה זו אינה ניתנת לביטול.`)) {
+                DB.deleteUser(username);
                 showAlert('נמחק', 'המשתמש נמחק בהצלחה מהמערכת.', 'trash-2');
-                closeAdminEditUserModal();
-                render();
+                closeAdminEditUserModal(); if(!isFirebaseConfigured) render();
             }
-        };
-
-        const generateStudentInboxHTML = (inbox) => {
-            if(!inbox || inbox.length === 0) return `<div class="text-zinc-400 text-sm py-4">אין הודעות נכנסות.</div>`;
-            return inbox.map(m => `
-                <div class="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm mb-3">
-                    <div class="flex justify-between text-xs text-zinc-500 mb-2"><span>מאת: צוות הדרכה</span><span dir="ltr">${m.date}</span></div>
-                    <p class="text-zinc-900">${m.text}</p>
-                </div>`).join('');
-        };
-
-        const generateAdminIncomingMessagesHTML = (usersDB) => {
-            let html = '';
-            usersDB.forEach(u => {
-                if(u.sentMessages && u.sentMessages.length > 0) {
-                    u.sentMessages.forEach(m => {
-                        html += `
-                            <div class="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm mb-3">
-                                <div class="flex justify-between items-center mb-2">
-                                    <div class="text-sm font-bold text-blue-600">מאת: ${u.name}</div>
-                                    <div class="text-xs text-zinc-400" dir="ltr">${m.date}</div>
-                                </div>
-                                <p class="text-zinc-800 text-sm mb-3">${m.text}</p>
-                                <button onclick="openAdminMessageModal('${u.name}')" class="text-xs font-bold text-zinc-500 hover:text-zinc-900 bg-zinc-100 px-3 py-1.5 rounded-lg transition">השב לתלמיד</button>
-                            </div>`;
-                    });
-                }
-            });
-            return html || '<div class="text-zinc-500 text-sm">אין הודעות חדשות מתלמידים.</div>';
         };
 
         const renderLoginHTML = () => `
@@ -710,6 +964,7 @@
                 <div class="flex justify-center mb-8"><div class="bg-zinc-100 p-4 rounded-full border border-zinc-200"><i data-lucide="graduation-cap" class="w-8 h-8 text-zinc-900"></i></div></div>
                 <h2 class="text-3xl font-extrabold text-center text-zinc-900 mb-2 tracking-tight">PsychoMaster</h2>
                 <p class="text-center text-zinc-500 mb-8 text-sm">המערכת המתקדמת לניהול פסיכומטרי</p>
+                ${isFirebaseConfigured ? '<div class="text-center mb-4 text-xs font-bold text-emerald-600 bg-emerald-50 py-1 rounded">מחובר לענן ☁️</div>' : '<div class="text-center mb-4 text-xs font-bold text-orange-600 bg-orange-50 py-1 rounded">עובד מקומית (Offline)</div>'}
                 <div id="login-error" class="hidden mb-6 p-4 bg-zinc-900 text-white rounded-xl text-sm font-medium text-center shadow-lg"></div>
                 <form onsubmit="handleLogin(event)" class="space-y-5">
                     <div><input type="text" id="login-username" required class="w-full px-4 py-3.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-zinc-900 transition-all font-medium" placeholder="שם משתמש (חדש נוצר אוטומטית)"></div>
@@ -729,26 +984,42 @@
                         { id: 'dashboard', label: 'סקירה כללית', icon: 'layout-dashboard' },
                         { id: 'calendar', label: 'לוח שנה חודשי', icon: 'calendar-days' },
                         { id: 'tasks', label: 'משימות אישיות', icon: 'check-square' },
-                        { id: 'schedule', label: 'מערכת קורס', icon: 'clock' }
+                        { id: 'schedule', label: 'מערכת קורס', icon: 'clock' },
+                        { id: 'homework', label: 'שיעורי בית', icon: 'book-open-check' }
                     ]},
                     { title: 'מעקב וציונים', items: [
                         { id: 'simulations', label: 'מרכז סימולציות', icon: 'target' },
                         { id: 'calculator', label: 'מחשבון המרה', icon: 'calculator' }
                     ]},
                     { title: 'עזרי למידה', items: [
-                        { id: 'dictionary_words', label: 'מילון אישי', icon: 'book-open' },
+                        { id: 'dict_hebrew', label: 'מילון עברית', icon: 'book-open' },
+                        { id: 'dict_english', label: 'מילון אנגלית', icon: 'book-type' },
                         { id: 'dictionary_images', label: 'גלריית צילומים', icon: 'image' },
+                        { id: 'quant_basics', label: 'יסודות כמותי', icon: 'calculator' },
                         { id: 'messages', label: 'תקשורת והודעות', icon: 'message-square' }
                     ]}
                 ];
             }
-            
-            let navLinks = menuGroups.map(group => `
-                <div class="mb-4 last:mb-0">
-                    ${group.title ? `<div class="text-xs font-bold text-zinc-600 uppercase tracking-wider mb-2 px-4 hidden md:block">${group.title}</div>` : ''}
-                    <div class="space-y-1">
+
+            let navLinks = menuGroups.map(group => {
+                const hasActiveItem = group.items.some(item => state.view === item.id || (item.id.startsWith('dict_') && state.view === 'dict_practice' && state.dict.practiceLang === item.id.split('_')[1]));
+                
+                if (state.expandedMenus[group.title] === undefined) {
+                    state.expandedMenus[group.title] = hasActiveItem || state.isAdmin;
+                }
+                const isOpen = state.expandedMenus[group.title];
+
+                return `
+                <div class="mb-2 last:mb-0 flex-shrink-0">
+                    ${group.title ? `
+                    <button onclick="toggleMenu('${group.title}')" class="w-full flex items-center justify-between px-4 py-2 text-xs font-bold text-zinc-500 uppercase tracking-wider hover:text-zinc-300 hover:bg-zinc-900/50 rounded-lg transition group focus:outline-none hidden md:flex">
+                        <span>${group.title}</span>
+                        <i data-lucide="${isOpen ? 'chevron-down' : 'chevron-left'}" class="w-4 h-4 transition-transform"></i>
+                    </button>
+                    ` : ''}
+                    <div class="flex md:flex-col gap-2 md:gap-0 md:space-y-1 overflow-visible md:overflow-hidden transition-all duration-300 ${isOpen ? 'md:max-h-[500px] md:mt-2 md:opacity-100' : 'md:max-h-0 md:opacity-0 md:pointer-events-none'}">
                         ${group.items.map(item => {
-                            const isActive = state.view === item.id || (item.id === 'dictionary_words' && state.view === 'dict_practice');
+                            const isActive = state.view === item.id || (item.id.startsWith('dict_') && state.view === 'dict_practice' && state.dict.practiceLang === item.id.split('_')[1]);
                             const activeClass = isActive ? 'bg-zinc-100 text-zinc-900 font-bold shadow-sm' : 'hover:bg-zinc-900 hover:text-zinc-200 text-zinc-500 font-medium';
                             return `
                                 <button onclick="switchView('${item.id}')" class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all whitespace-nowrap ${activeClass} w-full text-right group">
@@ -759,7 +1030,7 @@
                         }).join('')}
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
 
             return `
                 <div class="p-6 flex items-center gap-3 text-white border-b border-zinc-900">
@@ -978,7 +1249,12 @@
                         <div class="space-y-3 pl-14">
                             ${classes.map(c => `
                                 <div class="bg-white border border-zinc-200 rounded-xl p-4 flex justify-between shadow-sm group ${state.editingClassId === c.id ? 'ring-2 ring-zinc-900' : ''}">
-                                    <div class="flex items-center gap-4"><div class="font-mono font-bold text-zinc-700" dir="ltr">${c.startTime} ${c.endTime ? `<span class="text-zinc-400 font-normal">- ${c.endTime}</span>` : ''}</div><div class="w-px h-6 bg-zinc-200"></div>${c.isZoom ? `<span class="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-bold flex items-center gap-1"><i data-lucide="video" class="w-3 h-3"></i> זום</span>` : `<span class="px-2 py-1 bg-zinc-100 text-zinc-700 rounded text-xs font-bold flex items-center gap-1"><i data-lucide="users" class="w-3 h-3"></i> פרונטלי</span>`}</div>
+                                    <div class="flex items-center gap-4">
+                                        <div class="font-mono font-bold text-zinc-700" dir="ltr">${c.startTime} ${c.endTime ? `<span class="text-zinc-400 font-normal">- ${c.endTime}</span>` : ''}</div>
+                                        <div class="w-px h-6 bg-zinc-200"></div>
+                                        <div class="font-medium text-zinc-900">${c.title || 'שיעור כללי'}</div>
+                                        ${c.isZoom ? `<span class="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-bold flex items-center gap-1 mr-2"><i data-lucide="video" class="w-3 h-3"></i> זום</span>` : `<span class="px-2 py-1 bg-zinc-100 text-zinc-700 rounded text-xs font-bold flex items-center gap-1 mr-2"><i data-lucide="users" class="w-3 h-3"></i> פרונטלי</span>`}
+                                    </div>
                                     <div class="flex gap-1 opacity-0 group-hover:opacity-100"><button onclick="editWeeklyClass(${c.id})" class="text-zinc-400 hover:text-zinc-900 p-1"><i data-lucide="edit-2" class="w-4 h-4"></i></button><button onclick="deleteWeeklyClass(${c.id})" class="text-zinc-400 hover:text-red-500 p-1"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>
                                 </div>
                             `).join('')}
@@ -996,6 +1272,7 @@
                         <div class="lg:col-span-1"><div class="bg-white rounded-2xl border border-zinc-200 p-6 sticky top-6">
                             <h3 id="class-form-title" class="font-bold mb-4">${state.editingClassId ? 'עריכת שיעור' : 'הוספת שיעור'}</h3>
                             <form onsubmit="saveWeeklyClass(event)" class="space-y-4">
+                                <div><label class="block text-xs font-bold text-zinc-500 mb-1">נושא / תיאור</label><input type="text" id="class-title" placeholder="למשל: כמותי + מילולי" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:border-zinc-500 font-medium"></div>
                                 <select id="class-day" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:border-zinc-500 font-medium">${days.map((d,i) => `<option value="${i}">יום ${d}</option>`).join('')}</select>
                                 <div class="grid grid-cols-2 gap-2">
                                     <div><label class="block text-xs font-bold text-zinc-500 mb-1">התחלה</label><input type="time" id="class-start-time" required class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-3 text-sm font-mono focus:border-zinc-500"></div>
@@ -1006,6 +1283,45 @@
                             </form>
                         </div></div>
                         <div class="lg:col-span-2"><div class="bg-zinc-50/50 rounded-2xl border border-zinc-200 p-8 min-h-[400px]">${scheduleHTML || `<div class="text-center text-zinc-400 py-10">אין שיעורים במערכת.</div>`}</div></div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderHomeworkHTML = () => {
+            const hw = state.profile.homework || [];
+            
+            const hwList = hw.length === 0 ? `<div class="text-center py-10 text-zinc-500 bg-zinc-50 rounded-2xl border border-zinc-100">אין שיעורי בית פתוחים כרגע. איזה כיף!</div>` : 
+                hw.map(h => `
+                <div class="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm flex items-start gap-4 hover:border-zinc-300 transition group">
+                    <button onclick="toggleHomework(${h.id})" class="mt-0.5 w-6 h-6 rounded border-2 flex items-center justify-center shrink-0 ${h.done ? 'bg-emerald-500 border-emerald-500' : 'border-zinc-300'}">${h.done ? '<i data-lucide="check" class="w-4 h-4 text-white"></i>' : ''}</button>
+                    <div class="flex-1">
+                        <div class="flex justify-between items-start">
+                            <h4 class="font-bold text-lg ${h.done ? 'text-zinc-400 line-through' : 'text-zinc-900'}">${h.subject}</h4>
+                            <button onclick="deleteHomework(${h.id})" class="text-zinc-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                        <p class="text-zinc-600 text-sm mt-1 mb-2 ${h.done ? 'opacity-50' : ''}">${h.pages}</p>
+                        ${h.dueDate ? `<div class="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-100 text-zinc-600 rounded text-xs font-bold"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> למתי: ${h.dueDate.split('-').reverse().join('.')}</div>` : ''}
+                    </div>
+                </div>
+                `).join('');
+
+            return `
+                <div class="max-w-4xl mx-auto animate-in fade-in duration-500">
+                    <div class="mb-8"><h2 class="text-3xl font-bold text-zinc-900 mb-1">שיעורי בית ומטלות קורס</h2><p class="text-zinc-500">מרכז המעקב אחר שיעורי הבית מהספרים והחוברות.</p></div>
+                    <div class="grid md:grid-cols-3 gap-8">
+                        <div class="md:col-span-1">
+                            <div class="bg-white rounded-2xl border border-zinc-200 p-6 sticky top-6 shadow-sm">
+                                <h3 class="font-bold text-zinc-900 mb-4">הוספת שיעורי בית</h3>
+                                <form onsubmit="addHomework(event)" class="space-y-4">
+                                    <div><label class="block text-xs font-bold text-zinc-500 mb-1">נושא / ספר</label><input type="text" id="hw-subject" required placeholder="למשל: אלגברה - ספר שמן" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:border-zinc-900"></div>
+                                    <div><label class="block text-xs font-bold text-zinc-500 mb-1">עמודים ותרגילים</label><textarea id="hw-pages" required placeholder="עמ' 45-50, תרגילים זוגיים" rows="3" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:border-zinc-900 resize-none"></textarea></div>
+                                    <div><label class="block text-xs font-bold text-zinc-500 mb-1">למתי? (אופציונלי)</label><input type="date" id="hw-date" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:border-zinc-900 font-mono"></div>
+                                    <button type="submit" class="w-full py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800">שמור מטלה</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="md:col-span-2 space-y-3">${hwList}</div>
                     </div>
                 </div>
             `;
@@ -1157,8 +1473,40 @@
             </div>
         `;
 
-        const renderDictionaryWordsHTML = () => {
-            const words = state.profile.customDictionary.words || [];
+        const renderQuantPracticeHTML = () => `
+            <div class="max-w-4xl mx-auto animate-in fade-in duration-500">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold text-zinc-900 mb-1">יסודות כמותי - חדר כושר למוח</h2>
+                    <p class="text-zinc-500">תרגול מהיר של בסיס מתמטי שיחסוך לך המון זמן בבחינה.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm text-center flex flex-col items-center">
+                        <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4"><i data-lucide="hash" class="w-8 h-8"></i></div>
+                        <h3 class="font-bold text-lg mb-2">לוח הכפל עד 12</h3>
+                        <p class="text-sm text-zinc-500 mb-6 flex-1">שליפה מהירה של מכפלות קריטיות לחישובים בכמותי.</p>
+                        <button class="w-full py-3 bg-zinc-900 text-white rounded-xl font-bold opacity-50 cursor-not-allowed">בקרוב</button>
+                    </div>
+                    <div class="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm text-center flex flex-col items-center">
+                        <div class="w-16 h-16 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center mb-4"><i data-lucide="chevron-up" class="w-8 h-8"></i></div>
+                        <h3 class="font-bold text-lg mb-2">חזקות נפוצות</h3>
+                        <p class="text-sm text-zinc-500 mb-6 flex-1">ריבועים עד 20, חזקות שלישיות ורביעיות נפוצות.</p>
+                        <button class="w-full py-3 bg-zinc-900 text-white rounded-xl font-bold opacity-50 cursor-not-allowed">בקרוב</button>
+                    </div>
+                    <div class="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm text-center flex flex-col items-center">
+                        <div class="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-4"><i data-lucide="scan-line" class="w-8 h-8"></i></div>
+                        <h3 class="font-bold text-lg mb-2">שורשים ושלמים</h3>
+                        <p class="text-sm text-zinc-500 mb-6 flex-1">זיהוי מהיר של שורשים ריבועיים ושלישיים מוכרים.</p>
+                        <button class="w-full py-3 bg-zinc-900 text-white rounded-xl font-bold opacity-50 cursor-not-allowed">בקרוב</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const renderDictionaryWordsHTML = (lang) => {
+            const allWords = state.profile.customDictionary.words || [];
+            const words = allWords.filter(w => w.lang === lang);
+            const title = lang === 'he' ? 'מילון עברית' : 'מילון אנגלית';
+            
             const wordsHTML = words.length === 0 ? `<div class="text-center py-10 bg-zinc-50 rounded-xl text-zinc-500">המילון ריק. הזן מילים להתחיל לתרגל.</div>` : 
                 words.map(w => `
                     <div class="flex items-center justify-between p-4 bg-white border border-zinc-200 rounded-xl shadow-sm hover:border-zinc-300">
@@ -1169,13 +1517,13 @@
 
             return `
                 <div class="max-w-4xl mx-auto animate-in fade-in duration-500">
-                    <div class="mb-8"><h2 class="text-3xl font-bold text-zinc-900 mb-1">מילון אישי</h2><p class="text-zinc-500">הכנס מילים שנתקעת בהן ובחן את עצמך.</p></div>
+                    <div class="mb-8"><h2 class="text-3xl font-bold text-zinc-900 mb-1">${title}</h2><p class="text-zinc-500">הכנס מילים שנתקעת בהן ובחן את עצמך.</p></div>
                     <div class="grid md:grid-cols-3 gap-8">
                         <div class="md:col-span-2 bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
                             <form onsubmit="addDictWord(event)" class="mb-6 flex gap-2">
-                                <select id="dict-lang" class="bg-zinc-50 border border-zinc-200 rounded-xl px-2 text-sm"><option value="he">עב'</option><option value="en">אנג'</option></select>
-                                <input type="text" id="dict-word" placeholder="מילה" required class="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:border-zinc-900">
-                                <input type="text" id="dict-meaning" placeholder="פירוש" required class="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:border-zinc-900">
+                                <input type="hidden" id="dict-lang" value="${lang}">
+                                <input type="text" id="dict-word" placeholder="${lang==='he'?'מילה בעברית':'Word in English'}" required class="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:border-zinc-900" dir="${lang==='en'?'ltr':'rtl'}">
+                                <input type="text" id="dict-meaning" placeholder="פירוש בעברית" required class="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:border-zinc-900">
                                 <button type="submit" class="px-4 py-2 bg-zinc-900 text-white rounded-xl font-bold"><i data-lucide="plus" class="w-5 h-5"></i></button>
                             </form>
                             <div class="space-y-2 max-h-[400px] overflow-y-auto">${wordsHTML}</div>
@@ -1183,10 +1531,11 @@
                         <div class="bg-zinc-900 rounded-2xl p-6 text-white text-center border border-zinc-800 shadow-xl self-start">
                             <i data-lucide="brain" class="w-12 h-12 mx-auto mb-4 text-zinc-400"></i>
                             <h3 class="text-xl font-bold mb-2">מרכז בחינה</h3>
-                            <p class="text-sm text-zinc-400 mb-6">יש לך ${words.length} מילים. בחר מצב בחינה:</p>
+                            <p class="text-sm text-zinc-400 mb-6">יש לך ${words.length} מילים ב${lang==='he'?'עברית':'אנגלית'}. בחר מצב בחינה:</p>
                             <div class="space-y-3">
-                                <button onclick="startDictPractice('american')" class="w-full py-3 bg-white text-zinc-900 rounded-xl font-bold hover:bg-zinc-100 flex justify-center gap-2"><i data-lucide="list"></i> אמריקאי</button>
-                                <button onclick="startDictPractice('typing')" class="w-full py-3 bg-zinc-800 text-white border border-zinc-700 rounded-xl font-bold hover:bg-zinc-700 flex justify-center gap-2"><i data-lucide="keyboard"></i> הקלדה</button>
+                                <button onclick="startDictPractice('flashcards', '${lang}')" class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 flex justify-center gap-2 shadow-md"><i data-lucide="layers"></i> כרטיסיות חכמות</button>
+                                <button onclick="startDictPractice('american', '${lang}')" class="w-full py-3 bg-white text-zinc-900 rounded-xl font-bold hover:bg-zinc-100 flex justify-center gap-2"><i data-lucide="list"></i> אמריקאי</button>
+                                <button onclick="startDictPractice('typing', '${lang}')" class="w-full py-3 bg-zinc-800 text-white border border-zinc-700 rounded-xl font-bold hover:bg-zinc-700 flex justify-center gap-2"><i data-lucide="keyboard"></i> הקלדה</button>
                             </div>
                         </div>
                     </div>
@@ -1220,12 +1569,34 @@
 
         const renderDictPracticeHTML = () => {
             const wordObj = state.dict.practiceQueue[state.dict.currentPracticeIndex];
+            if(!wordObj) return ''; // Fallback
+            
             const isEnglish = wordObj.lang === 'en';
-            const total = state.dict.practiceQueue.length; const current = state.dict.currentPracticeIndex + 1;
+            const total = state.dict.totalWordsInPractice || state.dict.practiceQueue.length; 
+            const wordsLeft = state.dict.practiceQueue.length;
+            const current = total - wordsLeft + 1;
+            
             let practiceContent = '';
 
-            if (state.dict.practiceMode === 'american') {
-                const allWords = state.profile.customDictionary.words;
+            if (state.dict.practiceMode === 'flashcards') {
+                if(!state.dict.isFlipped) {
+                    practiceContent = `
+                        <div class="py-12 cursor-pointer bg-zinc-50 border-2 border-dashed border-zinc-300 rounded-2xl hover:bg-zinc-100 transition shadow-sm" onclick="flipFlashcard()">
+                            <div class="text-zinc-400 text-sm font-bold mb-2 uppercase tracking-widest">לחץ לחשיפת הפירוש</div>
+                        </div>`;
+                } else {
+                    practiceContent = `
+                        <div class="py-12 bg-zinc-900 text-white rounded-2xl animate-in zoom-in-95 duration-300 shadow-xl">
+                            <div class="text-3xl font-bold mb-8">${wordObj.meaning}</div>
+                            <div class="flex gap-4 justify-center px-8">
+                                <button onclick="markFlashcard(true)" class="flex-1 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold flex flex-col items-center gap-1 transition"><i data-lucide="check" class="w-6 h-6"></i> ידעתי</button>
+                                <button onclick="markFlashcard(false)" class="flex-1 py-4 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold flex flex-col items-center gap-1 transition"><i data-lucide="x" class="w-6 h-6"></i> לא ידעתי</button>
+                            </div>
+                        </div>`;
+                }
+            }
+            else if (state.dict.practiceMode === 'american') {
+                const allWords = state.profile.customDictionary.words.filter(w => w.lang === state.dict.practiceLang);
                 let wrongOptions = allWords.filter(w => w.id !== wordObj.id).sort(() => 0.5 - Math.random()).slice(0, 3);
                 let options = [wordObj, ...wrongOptions].sort(() => 0.5 - Math.random());
                 practiceContent = options.map(opt => {
@@ -1245,7 +1616,7 @@
             }
 
             let resultMessage = '';
-            if (state.dict.showAnswer) {
+            if (state.dict.showAnswer && state.dict.practiceMode !== 'flashcards') {
                 if (state.dict.lastAnswerCorrect) resultMessage = `<div class="text-green-600 font-bold text-xl flex justify-center gap-2 mb-6"><i data-lucide="check-circle"></i> מדויק!</div>`;
                 else resultMessage = `<div class="text-red-500 font-bold flex flex-col items-center gap-2 mb-6"><div><i data-lucide="x-circle" class="w-6 h-6 inline"></i> טעות.</div><div class="text-zinc-600 font-medium">נכון: <span class="text-zinc-900 bg-zinc-100 px-2 py-1 rounded">${wordObj.meaning}</span></div></div>`;
             }
@@ -1253,15 +1624,17 @@
             return `
                 <div class="max-w-2xl mx-auto animate-in fade-in duration-500 text-center">
                     <div class="flex justify-between items-center mb-8 border-b border-zinc-200 pb-4">
-                        <button onclick="switchView('dictionary_words')" class="text-zinc-500 flex gap-1"><i data-lucide="arrow-right" class="w-5 h-5"></i> חזור</button>
-                        <span class="font-mono text-sm bg-white px-3 py-1 rounded-full border border-zinc-200">${current} / ${total}</span>
+                        <button onclick="switchView('dict_${state.dict.practiceLang}')" class="text-zinc-500 flex gap-1 hover:text-zinc-900"><i data-lucide="arrow-right" class="w-5 h-5"></i> סיום תרגול</button>
+                        <div class="font-mono text-sm bg-white px-4 py-1.5 rounded-full border border-zinc-200 font-bold text-zinc-700">
+                            ${state.dict.practiceMode === 'flashcards' ? `נשארו ללימוד: ${wordsLeft}` : `${current} / ${total}`}
+                        </div>
                     </div>
                     <div class="bg-white rounded-[2rem] border border-zinc-200 p-10 shadow-sm">
                         <h2 class="text-6xl font-light text-zinc-900 mb-10" dir="${isEnglish ? 'ltr' : 'rtl'}">${wordObj.word}</h2>
-                        <div class="space-y-4 max-w-sm mx-auto">${practiceContent}</div>
+                        <div class="space-y-4 mx-auto ${state.dict.practiceMode === 'flashcards' ? 'max-w-md' : 'max-w-sm'}">${practiceContent}</div>
                         <div class="mt-8 min-h-[80px]">
                             ${resultMessage}
-                            ${state.dict.showAnswer ? (current < total ? `<button onclick="nextPracticeWord()" class="px-8 py-3 bg-zinc-900 text-white rounded-xl font-bold mx-auto flex gap-2">הבא <i data-lucide="arrow-left" class="w-5 h-5"></i></button>` : `<button onclick="finishDictPractice()" class="px-8 py-3 bg-zinc-900 text-white rounded-xl font-bold mx-auto">סיום תרגול</button>`) : ''}
+                            ${state.dict.showAnswer && state.dict.practiceMode !== 'flashcards' ? (wordsLeft > 1 ? `<button onclick="nextPracticeWord()" class="px-8 py-3 bg-zinc-900 text-white rounded-xl font-bold mx-auto flex gap-2 shadow-md">הבא <i data-lucide="arrow-left" class="w-5 h-5"></i></button>` : `<button onclick="finishDictPractice()" class="px-8 py-3 bg-zinc-900 text-white rounded-xl font-bold mx-auto shadow-md">סיום תרגול</button>`) : ''}
                         </div>
                     </div>
                 </div>
@@ -1270,31 +1643,19 @@
 
         const renderMessagesHTML = () => {
             const p = state.profile;
-            const inboxHTML = generateStudentInboxHTML(p.messages || []);
-            const outboxHTML = (p.sentMessages || []).length === 0 ? `<div class="text-zinc-400 text-sm py-4">לא נשלחו הודעות.</div>` : (p.sentMessages || []).map(m => `
-                <div class="bg-zinc-50 p-4 rounded-xl border border-zinc-100 mb-3">
-                    <div class="flex justify-between text-xs text-zinc-500 mb-2"><span>הודעה ששלחת לצוות</span><span dir="ltr">${m.date}</span></div>
-                    <p class="text-zinc-700">${m.text}</p>
-                </div>`).join('');
-
             return `
                 <div class="max-w-4xl mx-auto animate-in fade-in duration-500">
-                    <div class="mb-8"><h2 class="text-3xl font-bold text-zinc-900 mb-1">תיבת הודעות ותקשורת</h2><p class="text-zinc-500">צור קשר עם צוות ההדרכה וקבל עדכונים. מתעדכן אוטומטית.</p></div>
-                    <div class="grid md:grid-cols-2 gap-8">
-                        <div>
-                            <h3 class="font-bold text-lg mb-4 flex items-center gap-2"><i data-lucide="inbox" class="w-5 h-5 text-blue-500"></i> דואר נכנס</h3>
-                            <div id="student-inbox-list" class="space-y-2">${inboxHTML}</div>
+                    <div class="mb-8"><h2 class="text-3xl font-bold text-zinc-900 mb-1">תקשורת והודעות צוות</h2><p class="text-zinc-500">התייעצות, שאלות וקבלת עדכונים מהמדריך שלך.</p></div>
+                    <div class="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden flex flex-col h-[600px]">
+                        <div class="bg-zinc-50 p-4 border-b border-zinc-100 font-bold text-zinc-700 flex items-center gap-2"><i data-lucide="message-circle" class="w-5 h-5"></i> צ'אט חי</div>
+                        <div class="flex-1 p-6 overflow-y-auto bg-zinc-50/50" id="student-unified-chat">
+                            ${generateUnifiedChatHTML(p.sentMessages, p.messages, false)}
                         </div>
-                        <div>
-                            <div class="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm mb-6">
-                                <h3 class="font-bold mb-4">שליחת הודעה לצוות</h3>
-                                <form onsubmit="sendMessageToAdmin(event)">
-                                    <textarea id="student-msg-text" required rows="3" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 mb-3 resize-none focus:border-zinc-900 text-sm" placeholder="איך אפשר לעזור?"></textarea>
-                                    <button type="submit" class="w-full py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 flex justify-center gap-2"><i data-lucide="send" class="w-4 h-4"></i> שלח הודעה</button>
-                                </form>
-                            </div>
-                            <h3 class="font-bold text-sm text-zinc-500 mb-4 uppercase">היסטוריית שליחות</h3>
-                            <div class="space-y-2">${outboxHTML}</div>
+                        <div class="p-4 border-t border-zinc-100 bg-white">
+                            <form onsubmit="sendMessageToAdmin(event)" class="flex gap-3">
+                                <input type="text" id="student-msg-text" required class="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 focus:border-zinc-900 text-sm" placeholder="הקלד כאן הודעה לצוות...">
+                                <button type="submit" class="px-6 py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 flex items-center gap-2"><i data-lucide="send" class="w-4 h-4"></i> שלח</button>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -1302,7 +1663,7 @@
         };
 
         const renderAdminDashboardHTML = () => {
-            const usersDB = JSON.parse(localStorage.getItem('psychoProUsersDB') || '[]');
+            const usersDB = state.adminUsersCache;
             const incomingMessagesHTML = generateAdminIncomingMessagesHTML(usersDB);
 
             return `
@@ -1318,23 +1679,23 @@
                                     </thead>
                                     <tbody class="divide-y divide-zinc-100">
                                         ${usersDB.map(u => `
-                                            <tr class="hover:bg-zinc-50 transition">
+                                            <tr class="hover:bg-zinc-50 transition cursor-pointer" onclick="openAdminViewModal('${u.name}')">
                                                 <td class="p-4"><div class="font-bold text-zinc-900">${u.name}</div><div class="font-mono text-xs text-zinc-400">${u.password}</div></td>
                                                 <td class="p-4 text-zinc-500 text-xs" dir="ltr">${u.lastLogin || '-'}</td>
                                                 <td class="p-4 flex justify-center gap-2">
-                                                    <button onclick="openAdminViewModal('${u.name}')" class="px-3 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-100" title="צפה בתיק"><i data-lucide="eye" class="w-4 h-4"></i></button>
-                                                    <button onclick="openAdminMessageModal('${u.name}')" class="px-3 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-zinc-800" title="שלח הודעה"><i data-lucide="message-square" class="w-4 h-4"></i></button>
-                                                    <button onclick="openAdminEditUserModal('${u.name}')" class="px-3 py-2 bg-zinc-100 text-zinc-600 rounded-lg text-sm font-bold hover:bg-zinc-200" title="הגדרות תלמיד (שינוי שם/סיסמה/מחיקה)"><i data-lucide="settings" class="w-4 h-4"></i></button>
+                                                    <button onclick="event.stopPropagation(); openAdminViewModal('${u.name}', 'info')" class="px-3 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold hover:bg-blue-100" title="צפה בתיק"><i data-lucide="eye" class="w-4 h-4"></i></button>
+                                                    <button onclick="event.stopPropagation(); openAdminViewModal('${u.name}', 'chat')" class="px-3 py-2 bg-zinc-900 text-white rounded-lg text-sm font-bold hover:bg-zinc-800" title="שיחה מלאה"><i data-lucide="message-square" class="w-4 h-4"></i></button>
+                                                    <button onclick="event.stopPropagation(); openAdminEditUserModal('${u.name}')" class="px-3 py-2 bg-zinc-100 text-zinc-600 rounded-lg text-sm font-bold hover:bg-zinc-200" title="הגדרות תלמיד"><i data-lucide="settings" class="w-4 h-4"></i></button>
                                                 </td>
                                             </tr>
-                                        `).join('') || `<tr><td colspan="3" class="p-8 text-center text-zinc-500">אין משתמשים</td></tr>`}
+                                        `).join('') || `<tr><td colspan="3" class="p-8 text-center text-zinc-500">אין משתמשים במערכת.</td></tr>`}
                                     </tbody>
                                 </table>
                             </div>
                         </div>
                         <div class="lg:col-span-1">
                             <div class="bg-zinc-50/50 rounded-2xl border border-zinc-200 p-6">
-                                <h3 class="font-bold text-zinc-900 mb-4 flex items-center gap-2"><i data-lucide="inbox" class="w-5 h-5 text-zinc-400"></i> פניות מתלמידים (מתעדכן חי)</h3>
+                                <h3 class="font-bold text-zinc-900 mb-4 flex items-center gap-2"><i data-lucide="inbox" class="w-5 h-5 text-zinc-400"></i> הודעות מחכות לתגובה</h3>
                                 <div id="admin-incoming-messages-container" class="max-h-[600px] overflow-y-auto pr-1">${incomingMessagesHTML}</div>
                             </div>
                         </div>
@@ -1360,16 +1721,21 @@
                     case 'calendar': main.innerHTML = renderCalendarHTML(); break;
                     case 'tasks': main.innerHTML = renderTasksHTML(); break;
                     case 'schedule': main.innerHTML = renderScheduleHTML(); break;
+                    case 'homework': main.innerHTML = renderHomeworkHTML(); break;
                     case 'simulations': main.innerHTML = renderSimulationsHTML(); break;
                     case 'calculator': main.innerHTML = renderCalculatorHTML(); if(state.calc) updateCalc('quant', state.calc.quant); break;
-                    case 'dictionary_words': main.innerHTML = renderDictionaryWordsHTML(); break;
+                    case 'dict_hebrew': main.innerHTML = renderDictionaryWordsHTML('he'); break;
+                    case 'dict_english': main.innerHTML = renderDictionaryWordsHTML('en'); break;
                     case 'dictionary_images': main.innerHTML = renderDictImagesHTML(); break;
                     case 'dict_practice': main.innerHTML = renderDictPracticeHTML(); break;
+                    case 'quant_basics': main.innerHTML = renderQuantPracticeHTML(); break;
                     case 'messages': main.innerHTML = renderMessagesHTML(); break;
                 }
             }
             lucide.createIcons();
             const typingInput = document.getElementById('typing-answer'); if(typingInput && !typingInput.disabled) typingInput.focus();
+            
+            const studChat = document.getElementById('student-unified-chat'); if(studChat) studChat.scrollTop = studChat.scrollHeight;
         };
 
         window.onload = initAuth;
