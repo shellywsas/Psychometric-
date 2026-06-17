@@ -6,7 +6,7 @@
     <title>PsychoMaster | ניהול פסיכומטרי בענן</title>
     
     <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -203,9 +203,6 @@
         // ==============================================================
         // 🚀 הגדרות FIREBASE - חיבור המערכת לענן (Realtime Database) 🚀
         // ==============================================================
-        // כדי לחבר את המערכת לאינטרנט אמיתי (כדי שהאדמין והתלמיד יעבדו באמת ממחשבים שונים),
-        // עליך לפתוח פרויקט בחינם ב-Firebase ולהדביק את ההגדרות שלך כאן למטה.
-        // כל עוד המשתנים כאן ריקים, המערכת מזהה זאת ועובדת אוטומטית במצב Offline מקומי!
         const firebaseConfig = {
             apiKey: "AIzaSyD06m76JI-z96hoV8n09sNzuL7eCAWvxGM",
             authDomain: "psichmtrey.firebaseapp.com",
@@ -220,6 +217,153 @@
             firebase.initializeApp(firebaseConfig);
         }
         // ==============================================================
+
+        // Helper: Fisher-Yates Array Shuffle (אקראיות אמיתית למילון ולתרגולים)
+        function shuffleArray(array) {
+            let curId = array.length;
+            while (0 !== curId) {
+                let randId = Math.floor(Math.random() * curId);
+                curId -= 1;
+                let tmp = array[curId];
+                array[curId] = array[randId];
+                array[randId] = tmp;
+            }
+            return array;
+        }
+
+        // פונקציה משופרת ומאובטחת לייצור תשובות שגויות למבחן אמריקאי
+        function generateWrongOptions(correctStr, generatorFunc) {
+            let opts = [correctStr];
+            let attempts = 0;
+            // מנסים לייצר 3 אופציות שגויות הגיוניות
+            while(opts.length < 4 && attempts < 50) {
+                let w = generatorFunc().toString();
+                if(w !== '0' && w !== 'NaN' && !opts.includes(w)) opts.push(w);
+                attempts++;
+            }
+            // מנגנון גיבוי (Fallback) למקרה שהפונקציה לא הצליחה לייצר מספיק שונות
+            while(opts.length < 4) {
+                let fallback = (parseInt(correctStr || '10') + Math.floor(Math.random()*15) - 5).toString();
+                if(fallback !== '0' && !opts.includes(fallback)) opts.push(fallback);
+            }
+            return shuffleArray(opts);
+        }
+
+        // ==============================================================
+        // נתוני יסודות כמותי (מחולל שאלות אוטומטי אקראי ואינסופי)
+        // ==============================================================
+        const QUANT_TOPICS = [
+            {
+                id: 'multiplication',
+                title: 'לוח הכפל המורחב',
+                icon: 'hash',
+                intro: 'שליטה מוחלטת בלוח הכפל עד 15 (כולל כפולות מאתגרות כמו 13 × 4, 15 × 3). המערכת תדלג על תרגילים טריוויאליים מידי.',
+                generate: () => {
+                    let a, b;
+                    do {
+                        a = Math.floor(Math.random() * 14) + 2; // 2-15
+                        b = Math.floor(Math.random() * 11) + 2; // 2-12
+                    } while ((a <= 4 && b <= 4) || a === 10 || b === 10);
+                    
+                    const ans = (a * b).toString();
+                    return { q: `${a} × ${b} = ?`, a: ans, options: generateWrongOptions(ans, () => (a + Math.floor(Math.random()*3)-1) * (b + Math.floor(Math.random()*3)-1)), explanation: `כפל פשוט: ${a} כפול ${b} הם ${ans}. מומלץ לשנן כפולות נפוצות אלו בעל פה.` };
+                }
+            },
+            {
+                id: 'powers',
+                title: 'חזקות ושורשים',
+                icon: 'chevron-up',
+                intro: 'הכרת החזקות הריבועיות עד 20², חזקות שלישיות נפוצות, ושורשים ריבועיים בסיסיים.',
+                generate: () => {
+                    const rand = Math.random();
+                    if(rand > 0.7) { 
+                        const base = Math.floor(Math.random() * 4) + 2; 
+                        const ans = Math.pow(base, 3).toString();
+                        return { q: `${base}³ = ?`, a: ans, options: generateWrongOptions(ans, () => Math.pow(base, 3) + Math.floor(Math.random()*20)-10), explanation: `חזקה שלישית משמעותה להכפיל את המספר בעצמו 3 פעמים. ${base} × ${base} × ${base} = ${ans}.` };
+                    } else if(rand > 0.4) { 
+                        const base = Math.floor(Math.random() * 19) + 2; 
+                        const square = Math.pow(base, 2);
+                        const ans = base.toString();
+                        return { q: `√${square} = ?`, a: ans, options: generateWrongOptions(ans, () => base + Math.floor(Math.random()*6)-3), explanation: `שורש ריבועי הוא הפעולה ההפוכה לחזקה ריבועית. מכיוון ש-${base}² = ${square}, אז שורש של ${square} הוא ${base}.` };
+                    } else { 
+                        const base = Math.floor(Math.random() * 19) + 2; 
+                        const ans = Math.pow(base, 2).toString();
+                        return { q: `${base}² = ?`, a: ans, options: generateWrongOptions(ans, () => Math.pow(base + Math.floor(Math.random()*6)-3, 2)), explanation: `חזקה ריבועית: ${base} כפול ${base} שווה ל-${ans}.` };
+                    }
+                }
+            },
+            {
+                id: 'fractions',
+                title: 'שברים ואחוזים',
+                icon: 'percent',
+                intro: 'מעבר מהיר בין שבר פשוט לאחוזים (למשל: לדעת מיד ש-12.5% הם 1/8). התרגול כולל חצאים, רבעים, חמישיות, שישיות ושמיניות.',
+                generate: () => {
+                    const pairs = [
+                        { f: '1/2', p: '50%' }, { f: '1/4', p: '25%' }, { f: '3/4', p: '75%' },
+                        { f: '1/5', p: '20%' }, { f: '2/5', p: '40%' }, { f: '3/5', p: '60%' }, { f: '4/5', p: '80%' },
+                        { f: '1/8', p: '12.5%' }, { f: '3/8', p: '37.5%' }, { f: '5/8', p: '62.5%' }, { f: '7/8', p: '87.5%' },
+                        { f: '1/3', p: '33.3%' }, { f: '2/3', p: '66.6%' }, { f: '1/6', p: '16.6%' }, { f: '5/6', p: '83.3%' }
+                    ];
+                    const pair = pairs[Math.floor(Math.random() * pairs.length)];
+                    const isAskFrac = Math.random() > 0.5;
+                    if(isAskFrac) {
+                        return { q: `כמה זה ${pair.f} באחוזים?`, a: pair.p, options: generateWrongOptions(pair.p, () => pairs[Math.floor(Math.random()*pairs.length)].p), explanation: `השבר ${pair.f} מייצג בדיוק ${pair.p} מהשלם. נסה לזכור את הצמדים הנפוצים האלו.` };
+                    } else {
+                        return { q: `איזה שבר מייצג ${pair.p}?`, a: pair.f, options: generateWrongOptions(pair.f, () => pairs[Math.floor(Math.random()*pairs.length)].f), explanation: `האחוז ${pair.p} שקול בדיוק לשבר ${pair.f}.` };
+                    }
+                }
+            },
+            {
+                id: 'operations',
+                title: 'סדר פעולות ופילוג',
+                icon: 'brackets',
+                intro: 'סוגריים, חזקות, כפל/חילוק, חיבור/חיסור. וכן חוקי פילוג וכינוס איברים ופתיחת סוגריים.',
+                generate: () => {
+                    const a = Math.floor(Math.random() * 5) + 2;
+                    const b = Math.floor(Math.random() * 5) + 2;
+                    const c = Math.floor(Math.random() * 5) + 2;
+                    const ans = (a + b * c).toString();
+                    return { q: `${a} + ${b} × ${c} = ?`, a: ans, options: generateWrongOptions(ans, () => ((a+b)*c) + Math.floor(Math.random()*5)), explanation: `לפי סדר פעולות חשבון, כפל קודם לחיבור. קודם מחשבים ${b} × ${c} שזה ${b*c}, ואז מוסיפים ${a}, לקבלת ${ans}.` };
+                }
+            },
+            {
+                id: 'equations',
+                title: 'משוואות ומערכות צירים',
+                icon: 'calculator',
+                intro: 'בידוד משתנה (למשל: למצוא את x מתוך 3x + 7 = 22), שיטות הצבה וזיהוי רביעים במערכת צירים קרטזית.',
+                generate: () => {
+                    const x = Math.floor(Math.random() * 10) + 1;
+                    const a = Math.floor(Math.random() * 5) + 2;
+                    const b = Math.floor(Math.random() * 20) + 1;
+                    const c = a * x + b;
+                    return { q: `מצא את x: <br><span dir="ltr">${a}x + ${b} = ${c}</span>`, a: x.toString(), options: generateWrongOptions(x.toString(), () => x + Math.floor(Math.random()*6)-3), explanation: `מעבירים אגפים: נעביר את ה-${b} לאגף הימני ונקבל ${a}x = ${c-b}. נחלק את שני האגפים ב-${a} ונקבל ש-x שווה ${x}.` };
+                }
+            },
+            {
+                id: 'geometry',
+                title: 'גיאומטריה בסיסית',
+                icon: 'triangle',
+                intro: 'קווים וזוויות, משולשים (סכום 180, פיתגורס a²+b²=c²), ומרובעים ועיגול (היקף ושטח מלבן, ריבוע ועיגול).',
+                generate: () => {
+                    const b = Math.floor(Math.random() * 8) + 3;
+                    const h = Math.floor(Math.random() * 8) + 3;
+                    const ans = ((b * h) / 2).toString();
+                    return { q: `מהו שטחו של משולש ישר זווית שניצביו הם ${b} ו-${h}?`, a: ans, options: generateWrongOptions(ans, () => (b*h) + Math.floor(Math.random()*4)), explanation: `שטח משולש ישר זווית שווה למחצית מכפלת הניצבים: (${b} × ${h}) חלקי 2 שזה ${ans}.` };
+                }
+            },
+            {
+                id: 'wordproblems',
+                title: 'בעיות מילוליות (היגיון כמותי)',
+                icon: 'brain',
+                intro: 'יחסים: הבנת המושג "יחס" וחלוקת כמות כוללת. נוסחת התנועה הבסיסית: דרך = מהירות × זמן.',
+                generate: () => {
+                    const v = (Math.floor(Math.random() * 8) + 2) * 10; 
+                    const t = Math.floor(Math.random() * 4) + 2; 
+                    const ans = (v * t).toString();
+                    return { q: `רכבת נסעה במהירות קבועה של ${v} קמ"ש במשך ${t} שעות. <br>איזה מרחק היא עברה (בק"מ)?`, a: ans, options: generateWrongOptions(ans, () => (v*(t+1))), explanation: `הנוסחה לחישוב דרך היא: דרך = מהירות × זמן. כלומר ${v} קמ"ש כפול ${t} שעות שווה ל-${ans} ק"מ.` };
+                }
+            }
+        ];
 
         // מניעת רענון בטעות
         window.addEventListener('beforeunload', function (e) {
@@ -242,7 +386,8 @@
             view: 'login', profile: null, isAdmin: false, adminUsersCache: [],
             calc: { quant: 100, verbal: 100, english: 100 },
             dict: { practiceMode: null, practiceLang: 'he', practiceQueue: [], currentPracticeIndex: 0, practiceScore: 0, showAnswer: false, isFlipped: false },
-            activeTaskTimer: { id: null, interval: null, timeLeft: 0, totalDuration: 0 },
+            quantState: { topicObj: null, mode: null, history: [], currentIndex: -1, score: 0, startTime: null, interval: null, isTransitioning: false },
+            activeTaskTimer: { id: null, interval: null, timeLeft: 0, totalDuration: 0, isHomework: false },
             simTimer: { interval: null, timeLeft: 20 * 60, isRunning: false, isFullscreen: false },
             pomodoro: { interval: null, timeLeft: 25 * 60, isRunning: false, mode: 'work' },
             editingTaskId: null, editingClassId: null, targetUserForMessage: null,
@@ -315,7 +460,7 @@
 
         function showAlert(title, message, iconName = 'info') {
             document.getElementById('alert-title').textContent = title;
-            document.getElementById('alert-message').textContent = message;
+            document.getElementById('alert-message').innerHTML = message;
             document.getElementById('alert-icon').innerHTML = `<i data-lucide="${iconName}" class="w-8 h-8 text-zinc-900"></i>`;
             const modal = document.getElementById('alert-modal'); const box = document.getElementById('alert-modal-box');
             modal.classList.remove('hidden'); modal.classList.add('flex');
@@ -419,7 +564,7 @@
         };
 
         window.switchView = (viewName) => {
-            if (viewName !== 'tasks' && state.activeTaskTimer.interval) stopTaskTimer();
+            if (viewName !== 'tasks' && viewName !== 'homework' && state.activeTaskTimer.interval) stopTaskTimer();
             if (viewName !== 'simulations' && state.simTimer.interval) stopSimTimer();
             state.view = viewName; window.scrollTo(0, 0); render();
         };
@@ -667,9 +812,9 @@
 
         const formatTimeObj = (seconds) => { const m = Math.floor(seconds / 60); const s = seconds % 60; return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`; };
 
-        window.startTaskTimer = (id, durationMinutes) => {
+        window.startTaskTimer = (id, durationMinutes, isHomework = false) => {
             if (state.activeTaskTimer.interval) clearInterval(state.activeTaskTimer.interval);
-            state.activeTaskTimer = { id: id, totalDuration: durationMinutes * 60, timeLeft: durationMinutes * 60, interval: setInterval(() => {
+            state.activeTaskTimer = { id: id, isHomework: isHomework, totalDuration: durationMinutes * 60, timeLeft: durationMinutes * 60, interval: setInterval(() => {
                 if (state.activeTaskTimer.timeLeft > 0) {
                     state.activeTaskTimer.timeLeft--;
                     const timerDisplay = document.getElementById(`timer-display-${id}`);
@@ -677,7 +822,7 @@
                 } else { stopTaskTimer(); showAlert('סיום זמן', 'הזמן שהקצבת למשימה זו הסתיים. כל הכבוד!', 'check-circle'); }
             }, 1000) }; render();
         };
-        window.stopTaskTimer = () => { if (state.activeTaskTimer.interval) clearInterval(state.activeTaskTimer.interval); state.activeTaskTimer = { id: null, interval: null, timeLeft: 0, totalDuration: 0 }; render(); };
+        window.stopTaskTimer = () => { if (state.activeTaskTimer.interval) clearInterval(state.activeTaskTimer.interval); state.activeTaskTimer = { id: null, isHomework: false, interval: null, timeLeft: 0, totalDuration: 0 }; render(); };
 
         window.togglePomodoro = () => {
             if (state.pomodoro.isRunning) {
@@ -741,10 +886,11 @@
             const subject = document.getElementById('hw-subject').value.trim();
             const pages = document.getElementById('hw-pages').value.trim();
             const dueDate = document.getElementById('hw-date').value;
+            const duration = parseInt(document.getElementById('hw-duration').value) || null;
             if(subject && pages) {
                 const updatedProfile = { ...state.profile };
                 if(!updatedProfile.homework) updatedProfile.homework = [];
-                updatedProfile.homework.push({ id: Date.now(), subject, pages, dueDate, done: false });
+                updatedProfile.homework.push({ id: Date.now(), subject, pages, dueDate, duration, done: false });
                 saveProfile(updatedProfile); render();
             }
         };
@@ -755,7 +901,7 @@
         };
         window.deleteHomework = (id) => {
             const updatedProfile = { ...state.profile };
-            updatedProfile.homework = updatedProfile.homework.filter(h => h.id !== id); saveProfile(updatedProfile); render();
+            updatedProfile.homework = updatedProfile.homework.filter(h => h.id !== id); saveProfile(updatedProfile); if (state.activeTaskTimer.id === id) stopTaskTimer(); render();
         };
 
         window.changeCalendarMonth = (offset) => { state.calendarDate.setMonth(state.calendarDate.getMonth() + offset); render(); };
@@ -838,7 +984,7 @@
             
             state.dict = { 
                 practiceMode: mode, practiceLang: lang, 
-                practiceQueue: [...words].sort(() => 0.5 - Math.random()), 
+                practiceQueue: shuffleArray([...words]), 
                 totalWordsInPractice: words.length,
                 currentPracticeIndex: 0, practiceScore: 0, showAnswer: false, isFlipped: false 
             }; 
@@ -882,6 +1028,114 @@
             showAlert('סיום תרגול', msg, 'award'); 
             switchView(`dict_${state.dict.practiceLang}`); 
         };
+
+        // ==============================================================
+        // כמותי: תרגולים ופונקציות
+        // ==============================================================
+        window.openQuantTopic = (topicId) => {
+            const t = QUANT_TOPICS.find(x => x.id === topicId);
+            if(t) {
+                if(state.quantState.interval) clearInterval(state.quantState.interval);
+                state.quantState = { topicObj: t, mode: null, history: [], currentIndex: -1, score: 0, startTime: null, interval: null, isTransitioning: false };
+                switchView('quant_topic');
+            }
+        };
+
+        window.startQuantPractice = (mode) => {
+            state.quantState.mode = mode;
+            state.quantState.history = [];
+            state.quantState.currentIndex = -1;
+            state.quantState.score = 0;
+            state.quantState.startTime = Date.now();
+            state.quantState.isTransitioning = false;
+            
+            if(state.quantState.interval) clearInterval(state.quantState.interval);
+            state.quantState.interval = setInterval(() => {
+                const el = document.getElementById('quant-live-timer');
+                if(el && state.quantState.startTime) {
+                    const sec = Math.floor((Date.now() - state.quantState.startTime) / 1000);
+                    el.textContent = formatTimeObj(sec);
+                }
+            }, 1000);
+            
+            window.nextQuantQuestion();
+        };
+
+        window.nextQuantQuestion = () => {
+            if (state.quantState.currentIndex < state.quantState.history.length - 1) {
+                state.quantState.currentIndex++;
+            } else {
+                let newQ;
+                let isUnique = false;
+                let attempts = 0;
+                
+                // מנגנון חכם למניעת חזרתיות במהלך אותו תרגול
+                while (!isUnique && attempts < 50) {
+                    newQ = state.quantState.topicObj.generate();
+                    // בודקים האם השאלה המוגרלת כבר קיימת בהיסטוריה של התרגול הנוכחי
+                    const exists = state.quantState.history.some(item => item.q === newQ.q);
+                    if (!exists) {
+                        isUnique = true;
+                    }
+                    attempts++;
+                }
+
+                state.quantState.history.push({ ...newQ, userAnswer: null, isCorrect: null });
+                state.quantState.currentIndex = state.quantState.history.length - 1;
+            }
+            state.quantState.isTransitioning = false;
+            if(state.view !== 'quant_active_practice') switchView('quant_active_practice');
+            else render();
+        };
+
+        window.prevQuantQuestion = () => {
+            if (state.quantState.currentIndex > 0) {
+                state.quantState.currentIndex--;
+                render();
+            }
+        };
+
+        window.checkQuantAnswer = (answerGiven) => {
+            const qObj = state.quantState.history[state.quantState.currentIndex];
+            if(qObj.userAnswer !== null || state.quantState.isTransitioning) return;
+            
+            const isCorrect = answerGiven.toString() === qObj.a.toString();
+            qObj.userAnswer = answerGiven.toString();
+            qObj.isCorrect = isCorrect;
+            if(isCorrect) state.quantState.score++;
+            
+            state.quantState.isTransitioning = true;
+            render();
+            
+            if (state.quantState.currentIndex === state.quantState.history.length - 1) {
+                setTimeout(() => {
+                    if(state.view === 'quant_active_practice' && state.quantState.isTransitioning) {
+                        window.nextQuantQuestion();
+                    }
+                }, 1200); // השהייה של שנייה וקצת כדי לראות את הצבע הירוק/אדום
+            }
+        };
+
+        window.checkQuantTypingAnswer = (e) => {
+            e.preventDefault();
+            const input = document.getElementById('quant-typing-answer').value.trim();
+            checkQuantAnswer(input);
+        };
+
+        window.finishQuantPractice = () => {
+            if(state.quantState.interval) clearInterval(state.quantState.interval);
+            const totalSec = Math.floor((Date.now() - state.quantState.startTime) / 1000);
+            const answeredCount = state.quantState.history.filter(q => q.userAnswer !== null).length;
+            
+            if(answeredCount === 0) {
+                switchView('quant_basics');
+                return;
+            }
+            showAlert('סיום תרגול', `ענית נכונה על ${state.quantState.score} מתוך ${answeredCount} שאלות בנושא ${state.quantState.topicObj.title}.<br><br>⏱️ זמן תרגול כולל: <b>${formatTimeObj(totalSec)}</b>`, 'award');
+            switchView('quant_basics');
+        };
+
+        // ==============================================================
 
         window.sendMessageToAdmin = (e) => {
             e.preventDefault(); const text = document.getElementById('student-msg-text').value.trim();
@@ -1002,7 +1256,7 @@
             }
 
             let navLinks = menuGroups.map(group => {
-                const hasActiveItem = group.items.some(item => state.view === item.id || (item.id.startsWith('dict_') && state.view === 'dict_practice' && state.dict.practiceLang === item.id.split('_')[1]));
+                const hasActiveItem = group.items.some(item => state.view === item.id || (item.id.startsWith('dict_') && state.view === 'dict_practice' && state.dict.practiceLang === item.id.split('_')[1]) || (item.id === 'quant_basics' && (state.view === 'quant_topic' || state.view === 'quant_active_practice')));
                 
                 if (state.expandedMenus[group.title] === undefined) {
                     state.expandedMenus[group.title] = hasActiveItem || state.isAdmin;
@@ -1019,7 +1273,7 @@
                     ` : ''}
                     <div class="flex md:flex-col gap-2 md:gap-0 md:space-y-1 overflow-visible md:overflow-hidden transition-all duration-300 ${isOpen ? 'md:max-h-[500px] md:mt-2 md:opacity-100' : 'md:max-h-0 md:opacity-0 md:pointer-events-none'}">
                         ${group.items.map(item => {
-                            const isActive = state.view === item.id || (item.id.startsWith('dict_') && state.view === 'dict_practice' && state.dict.practiceLang === item.id.split('_')[1]);
+                            const isActive = state.view === item.id || (item.id.startsWith('dict_') && state.view === 'dict_practice' && state.dict.practiceLang === item.id.split('_')[1]) || (item.id === 'quant_basics' && (state.view === 'quant_topic' || state.view === 'quant_active_practice'));
                             const activeClass = isActive ? 'bg-zinc-100 text-zinc-900 font-bold shadow-sm' : 'hover:bg-zinc-900 hover:text-zinc-200 text-zinc-500 font-medium';
                             return `
                                 <button onclick="switchView('${item.id}')" class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all whitespace-nowrap ${activeClass} w-full text-right group">
@@ -1193,7 +1447,7 @@
                 </div>`
                 : p.todos.map(todo => {
                     const timeInfo = todo.isRecurring ? `כל יום ${dayNames[todo.dayOfWeek]} ב-${todo.time||'--'}` : (todo.date ? `${todo.date.split('-').reverse().join('.')} ${todo.time||''}` : 'ללא מועד');
-                    const isTimerActive = state.activeTaskTimer.id === todo.id;
+                    const isTimerActive = state.activeTaskTimer.id === todo.id && !state.activeTaskTimer.isHomework;
                     let timerSection = '';
                     if (todo.duration) {
                         if (isTimerActive) {
@@ -1292,19 +1546,32 @@
             const hw = state.profile.homework || [];
             
             const hwList = hw.length === 0 ? `<div class="text-center py-10 text-zinc-500 bg-zinc-50 rounded-2xl border border-zinc-100">אין שיעורי בית פתוחים כרגע. איזה כיף!</div>` : 
-                hw.map(h => `
-                <div class="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm flex items-start gap-4 hover:border-zinc-300 transition group">
-                    <button onclick="toggleHomework(${h.id})" class="mt-0.5 w-6 h-6 rounded border-2 flex items-center justify-center shrink-0 ${h.done ? 'bg-emerald-500 border-emerald-500' : 'border-zinc-300'}">${h.done ? '<i data-lucide="check" class="w-4 h-4 text-white"></i>' : ''}</button>
-                    <div class="flex-1">
-                        <div class="flex justify-between items-start">
-                            <h4 class="font-bold text-lg ${h.done ? 'text-zinc-400 line-through' : 'text-zinc-900'}">${h.subject}</h4>
-                            <button onclick="deleteHomework(${h.id})" class="text-zinc-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                hw.map(h => {
+                    const isTimerActive = state.activeTaskTimer.id === h.id && state.activeTaskTimer.isHomework;
+                    let timerSection = '';
+                    if (h.duration && !h.done) {
+                        if (isTimerActive) {
+                            timerSection = `<div class="mt-4 p-3 bg-zinc-900 rounded-xl flex items-center justify-between text-white animate-in fade-in"><div class="flex items-center gap-3"><div class="w-3 h-3 rounded-full bg-red-500 animate-pulse"></div><span class="font-mono font-bold tracking-wider" id="timer-display-${h.id}">${formatTimeObj(state.activeTaskTimer.timeLeft)}</span></div><button onclick="stopTaskTimer()" class="px-3 py-1.5 bg-white/10 rounded-lg text-xs font-medium">הפסק</button></div>`;
+                        } else {
+                            timerSection = `<div class="mt-4 flex items-center justify-between pt-3 border-t border-zinc-100"><div class="text-xs font-semibold text-zinc-500 flex items-center gap-2"><i data-lucide="clock" class="w-3 h-3"></i> ${h.duration} דקות</div><button onclick="startTaskTimer(${h.id}, ${h.duration}, true)" class="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-900 rounded-lg text-xs font-bold flex items-center gap-2"><i data-lucide="play" class="w-3 h-3"></i> הפעל טיימר</button></div>`;
+                        }
+                    }
+
+                    return `
+                    <div class="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm flex items-start gap-4 hover:border-zinc-300 transition group relative">
+                        <button onclick="toggleHomework(${h.id})" class="mt-0.5 w-6 h-6 rounded border-2 flex items-center justify-center shrink-0 ${h.done ? 'bg-emerald-500 border-emerald-500' : 'border-zinc-300'}">${h.done ? '<i data-lucide="check" class="w-4 h-4 text-white"></i>' : ''}</button>
+                        <div class="flex-1">
+                            <div class="flex justify-between items-start">
+                                <h4 class="font-bold text-lg ${h.done ? 'text-zinc-400 line-through' : 'text-zinc-900'}">${h.subject}</h4>
+                                <button onclick="deleteHomework(${h.id})" class="text-zinc-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            </div>
+                            <p class="text-zinc-600 text-sm mt-1 mb-2 ${h.done ? 'opacity-50' : ''}">${h.pages.replace(/\n/g, '<br>')}</p>
+                            ${h.dueDate ? `<div class="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-100 text-zinc-600 rounded text-xs font-bold"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> למתי: ${h.dueDate.split('-').reverse().join('.')}</div>` : ''}
+                            ${timerSection}
                         </div>
-                        <p class="text-zinc-600 text-sm mt-1 mb-2 ${h.done ? 'opacity-50' : ''}">${h.pages}</p>
-                        ${h.dueDate ? `<div class="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-100 text-zinc-600 rounded text-xs font-bold"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> למתי: ${h.dueDate.split('-').reverse().join('.')}</div>` : ''}
                     </div>
-                </div>
-                `).join('');
+                    `;
+                }).join('');
 
             return `
                 <div class="max-w-4xl mx-auto animate-in fade-in duration-500">
@@ -1316,7 +1583,10 @@
                                 <form onsubmit="addHomework(event)" class="space-y-4">
                                     <div><label class="block text-xs font-bold text-zinc-500 mb-1">נושא / ספר</label><input type="text" id="hw-subject" required placeholder="למשל: אלגברה - ספר שמן" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:border-zinc-900"></div>
                                     <div><label class="block text-xs font-bold text-zinc-500 mb-1">עמודים ותרגילים</label><textarea id="hw-pages" required placeholder="עמ' 45-50, תרגילים זוגיים" rows="3" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:border-zinc-900 resize-none"></textarea></div>
-                                    <div><label class="block text-xs font-bold text-zinc-500 mb-1">למתי? (אופציונלי)</label><input type="date" id="hw-date" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm focus:border-zinc-900 font-mono"></div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div><label class="block text-xs font-bold text-zinc-500 mb-1">למתי?</label><input type="date" id="hw-date" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-2 py-3 text-xs focus:border-zinc-900 font-mono"></div>
+                                        <div><label class="block text-xs font-bold text-zinc-500 mb-1">טיימר (דק')</label><input type="number" id="hw-duration" placeholder="אופציונלי" min="1" max="300" class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-2 py-3 text-xs focus:border-zinc-900 font-mono"></div>
+                                    </div>
                                     <button type="submit" class="w-full py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800">שמור מטלה</button>
                                 </form>
                             </div>
@@ -1473,34 +1743,124 @@
             </div>
         `;
 
-        const renderQuantPracticeHTML = () => `
-            <div class="max-w-4xl mx-auto animate-in fade-in duration-500">
-                <div class="mb-8">
-                    <h2 class="text-3xl font-bold text-zinc-900 mb-1">יסודות כמותי - חדר כושר למוח</h2>
-                    <p class="text-zinc-500">תרגול מהיר של בסיס מתמטי שיחסוך לך המון זמן בבחינה.</p>
+        const renderQuantPracticeHTML = () => {
+            const topicsHTML = QUANT_TOPICS.map(topic => `
+                <div class="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm flex flex-col hover:border-zinc-400 transition group cursor-pointer" onclick="openQuantTopic('${topic.id}')">
+                    <div class="w-12 h-12 bg-zinc-100 text-zinc-600 rounded-full flex items-center justify-center mb-4 group-hover:bg-zinc-900 group-hover:text-white transition"><i data-lucide="${topic.icon}" class="w-6 h-6"></i></div>
+                    <h3 class="font-bold text-lg mb-2">${topic.title}</h3>
+                    <p class="text-sm text-zinc-500 line-clamp-2">${topic.intro.replace(/<[^>]*>?/gm, '')}</p>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm text-center flex flex-col items-center">
-                        <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4"><i data-lucide="hash" class="w-8 h-8"></i></div>
-                        <h3 class="font-bold text-lg mb-2">לוח הכפל עד 12</h3>
-                        <p class="text-sm text-zinc-500 mb-6 flex-1">שליפה מהירה של מכפלות קריטיות לחישובים בכמותי.</p>
-                        <button class="w-full py-3 bg-zinc-900 text-white rounded-xl font-bold opacity-50 cursor-not-allowed">בקרוב</button>
+            `).join('');
+
+            return `
+                <div class="max-w-5xl mx-auto animate-in fade-in duration-500">
+                    <div class="mb-8">
+                        <h2 class="text-3xl font-bold text-zinc-900 mb-1">יסודות כמותי - חדר כושר למוח</h2>
+                        <p class="text-zinc-500">תרגול מהיר של בסיס מתמטי שיחסוך לך המון זמן בבחינה. השאלות מיוצרות אוטומטית ואקראית.</p>
                     </div>
-                    <div class="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm text-center flex flex-col items-center">
-                        <div class="w-16 h-16 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center mb-4"><i data-lucide="chevron-up" class="w-8 h-8"></i></div>
-                        <h3 class="font-bold text-lg mb-2">חזקות נפוצות</h3>
-                        <p class="text-sm text-zinc-500 mb-6 flex-1">ריבועים עד 20, חזקות שלישיות ורביעיות נפוצות.</p>
-                        <button class="w-full py-3 bg-zinc-900 text-white rounded-xl font-bold opacity-50 cursor-not-allowed">בקרוב</button>
-                    </div>
-                    <div class="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm text-center flex flex-col items-center">
-                        <div class="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-4"><i data-lucide="scan-line" class="w-8 h-8"></i></div>
-                        <h3 class="font-bold text-lg mb-2">שורשים ושלמים</h3>
-                        <p class="text-sm text-zinc-500 mb-6 flex-1">זיהוי מהיר של שורשים ריבועיים ושלישיים מוכרים.</p>
-                        <button class="w-full py-3 bg-zinc-900 text-white rounded-xl font-bold opacity-50 cursor-not-allowed">בקרוב</button>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        ${topicsHTML}
                     </div>
                 </div>
-            </div>
-        `;
+            `;
+        };
+
+        const renderQuantTopicIntroHTML = () => {
+            const topic = state.quantState.topicObj;
+            return `
+                <div class="max-w-3xl mx-auto animate-in fade-in duration-500 text-center">
+                    <div class="mb-8 flex items-center justify-between border-b border-zinc-200 pb-4">
+                        <button onclick="switchView('quant_basics')" class="text-zinc-500 flex gap-1 hover:text-zinc-900 transition"><i data-lucide="arrow-right" class="w-5 h-5"></i> חזור לנושאים</button>
+                    </div>
+                    <div class="bg-white rounded-[2rem] border border-zinc-200 p-10 shadow-sm">
+                        <div class="w-20 h-20 bg-zinc-100 text-zinc-900 rounded-full flex items-center justify-center mx-auto mb-6"><i data-lucide="${topic.icon}" class="w-10 h-10"></i></div>
+                        <h2 class="text-4xl font-black text-zinc-900 mb-4">${topic.title}</h2>
+                        <div class="text-lg text-zinc-600 mb-10 max-w-xl mx-auto leading-relaxed">${topic.intro}</div>
+                        
+                        <div class="grid sm:grid-cols-2 gap-4 max-w-lg mx-auto">
+                            <button onclick="startQuantPractice('american')" class="py-4 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 flex justify-center gap-2 shadow-md"><i data-lucide="list"></i> תרגול אמריקאי</button>
+                            <button onclick="startQuantPractice('typing')" class="py-4 bg-white border-2 border-zinc-200 text-zinc-900 rounded-xl font-bold hover:bg-zinc-50 flex justify-center gap-2"><i data-lucide="keyboard"></i> הקלדה חופשית</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderQuantActivePracticeHTML = () => {
+            const qObj = state.quantState.history[state.quantState.currentIndex];
+            const currentNum = state.quantState.currentIndex + 1;
+            const isAnswered = qObj.userAnswer !== null;
+            
+            let practiceContent = '';
+
+            if (state.quantState.mode === 'american') {
+                practiceContent = qObj.options.map(opt => {
+                    let btnClass = "bg-white border-zinc-200 hover:border-zinc-400";
+                    if (isAnswered) {
+                        if (opt === qObj.a) btnClass = "bg-emerald-50 border-emerald-500 text-emerald-800 font-bold shadow-sm";
+                        else if (opt === qObj.userAnswer && !qObj.isCorrect) btnClass = "bg-red-50 border-red-500 text-red-800 font-bold shadow-sm";
+                        else btnClass = "bg-zinc-50 border-zinc-200 text-zinc-400 opacity-50";
+                    }
+                    return `<button ${isAnswered ? 'disabled' : ''} onclick="checkQuantAnswer('${opt}')" class="w-full p-5 rounded-xl border-2 text-2xl font-mono transition ${btnClass}" dir="ltr">${opt}</button>`;
+                }).join('');
+            } else {
+                practiceContent = `
+                    <form onsubmit="checkQuantTypingAnswer(event)">
+                        <input type="text" id="quant-typing-answer" required ${isAnswered ? 'disabled' : ''} value="${isAnswered ? qObj.userAnswer : ''}" autocomplete="off" class="w-full text-center text-3xl font-mono p-4 bg-zinc-50 border-2 border-zinc-200 rounded-xl focus:border-zinc-500 mb-4" placeholder="תשובה" dir="ltr">
+                        ${!isAnswered ? `<button type="submit" class="w-full py-4 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 transition shadow-md">בדוק תשובה</button>` : ''}
+                    </form>`;
+            }
+
+            let resultMessage = '';
+            let explanationHTML = '';
+            if (isAnswered) {
+                if (qObj.isCorrect) resultMessage = `<div class="text-emerald-600 font-bold text-xl flex justify-center gap-2"><i data-lucide="check-circle"></i> מדויק!</div>`;
+                else resultMessage = `<div class="text-red-500 font-bold flex flex-col items-center gap-1"><div><i data-lucide="x-circle" class="w-6 h-6 inline"></i> טעות.</div><div class="text-zinc-600 font-medium text-sm">נכון: <span class="text-zinc-900 font-mono bg-zinc-100 px-2 py-1 rounded mx-1" dir="ltr">${qObj.a}</span></div></div>`;
+                
+                if (state.quantState.currentIndex < state.quantState.history.length - 1) {
+                    explanationHTML = `<div class="bg-blue-50 border border-blue-100 p-4 rounded-xl text-blue-900 text-sm mt-5 text-right relative overflow-hidden"><div class="absolute top-0 right-0 w-1 h-full bg-blue-400"></div><strong class="block mb-1">הסבר לפתרון:</strong> ${qObj.explanation}</div>`;
+                }
+            }
+
+            const sec = Math.floor((Date.now() - state.quantState.startTime) / 1000);
+
+            return `
+                <div class="max-w-2xl mx-auto animate-in fade-in duration-500 text-center flex flex-col h-full min-h-[70vh]">
+                    <div class="flex justify-between items-center mb-6 border-b border-zinc-200 pb-4">
+                        <button onclick="finishQuantPractice()" class="text-zinc-500 flex gap-1 hover:text-zinc-900 transition font-medium"><i data-lucide="stop-circle" class="w-5 h-5"></i> סיום תרגול</button>
+                        <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-1.5 text-zinc-600 font-mono bg-zinc-100 px-3 py-1.5 rounded-lg text-sm font-bold border border-zinc-200" title="שעון עצר לתרגול">
+                                <i data-lucide="timer" class="w-4 h-4 text-zinc-500"></i> <span id="quant-live-timer">${formatTimeObj(sec)}</span>
+                            </div>
+                            <div class="font-mono text-sm bg-white px-4 py-1.5 rounded-full border border-zinc-200 font-bold text-zinc-700">
+                                שאלה ${currentNum}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-[2rem] border border-zinc-200 p-8 shadow-sm flex-1 flex flex-col justify-center relative">
+                        <h2 class="text-4xl md:text-5xl font-light text-zinc-900 mb-8 leading-relaxed font-mono">${qObj.q}</h2>
+                        
+                        <div class="space-y-4 max-w-sm mx-auto w-full ${state.quantState.mode === 'american' ? 'grid grid-cols-2 gap-4 space-y-0' : ''}">
+                            ${practiceContent}
+                        </div>
+                        
+                        <div class="mt-6 min-h-[60px] flex-shrink-0">
+                            ${resultMessage}
+                            ${explanationHTML}
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center mt-6 pt-4">
+                        <button onclick="prevQuantQuestion()" class="px-5 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl font-bold hover:bg-zinc-50 hover:text-zinc-900 flex gap-2 transition disabled:opacity-30 disabled:pointer-events-none shadow-sm" ${state.quantState.currentIndex === 0 ? 'disabled' : ''}><i data-lucide="arrow-right" class="w-5 h-5"></i> קודמת</button>
+                        ${state.quantState.currentIndex < state.quantState.history.length - 1 ? 
+                            `<button onclick="nextQuantQuestion()" class="px-5 py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 flex gap-2 transition shadow-md">הבאה <i data-lucide="arrow-left" class="w-5 h-5"></i></button>` : 
+                            `<div></div>`
+                        }
+                    </div>
+                </div>
+            `;
+        };
 
         const renderDictionaryWordsHTML = (lang) => {
             const allWords = state.profile.customDictionary.words || [];
@@ -1597,15 +1957,22 @@
             }
             else if (state.dict.practiceMode === 'american') {
                 const allWords = state.profile.customDictionary.words.filter(w => w.lang === state.dict.practiceLang);
-                let wrongOptions = allWords.filter(w => w.id !== wordObj.id).sort(() => 0.5 - Math.random()).slice(0, 3);
-                let options = [wordObj, ...wrongOptions].sort(() => 0.5 - Math.random());
+                
+                // יצירת אפשרויות שגויות (3)
+                let options = [wordObj.meaning];
+                let wrongWords = shuffleArray(allWords.filter(w => w.id !== wordObj.id));
+                for(let i=0; i<wrongWords.length && options.length < 4; i++) {
+                    if(!options.includes(wrongWords[i].meaning)) options.push(wrongWords[i].meaning);
+                }
+                options = shuffleArray(options); // ערבוב האפשרויות
+                
                 practiceContent = options.map(opt => {
                     let btnClass = "bg-white border-zinc-200 hover:border-zinc-400";
                     if (state.dict.showAnswer) {
-                        if (opt.id === wordObj.id) btnClass = "bg-green-50 border-green-500 text-green-800 font-bold";
+                        if (opt === wordObj.meaning) btnClass = "bg-green-50 border-green-500 text-green-800 font-bold";
                         else btnClass = "bg-zinc-50 border-zinc-200 text-zinc-400 opacity-50";
                     }
-                    return `<button ${state.dict.showAnswer ? 'disabled' : ''} onclick="checkAmericanAnswer('${opt.meaning.replace(/'/g, "\\'")}')" class="w-full text-right p-5 rounded-xl border-2 text-lg transition ${btnClass}">${opt.meaning}</button>`;
+                    return `<button ${state.dict.showAnswer ? 'disabled' : ''} onclick="checkAmericanAnswer('${opt.replace(/'/g, "\\'")}')" class="w-full text-right p-5 rounded-xl border-2 text-lg transition ${btnClass}">${opt}</button>`;
                 }).join('');
             } else {
                 practiceContent = `
@@ -1729,11 +2096,14 @@
                     case 'dictionary_images': main.innerHTML = renderDictImagesHTML(); break;
                     case 'dict_practice': main.innerHTML = renderDictPracticeHTML(); break;
                     case 'quant_basics': main.innerHTML = renderQuantPracticeHTML(); break;
+                    case 'quant_topic': main.innerHTML = renderQuantTopicIntroHTML(); break;
+                    case 'quant_active_practice': main.innerHTML = renderQuantActivePracticeHTML(); break;
                     case 'messages': main.innerHTML = renderMessagesHTML(); break;
                 }
             }
             lucide.createIcons();
             const typingInput = document.getElementById('typing-answer'); if(typingInput && !typingInput.disabled) typingInput.focus();
+            const quantTyping = document.getElementById('quant-typing-answer'); if(quantTyping && !quantTyping.disabled) quantTyping.focus();
             
             const studChat = document.getElementById('student-unified-chat'); if(studChat) studChat.scrollTop = studChat.scrollHeight;
         };
