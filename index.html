@@ -231,6 +231,40 @@
             return array;
         }
 
+        // Helper: פונקציית Levenshtein לבדיקת שגיאות כתיב קטנות
+        function levenshteinDistance(a, b) {
+            if (a.length === 0) return b.length;
+            if (b.length === 0) return a.length;
+            const matrix = [];
+            for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+            for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+            for (let i = 1; i <= b.length; i++) {
+                for (let j = 1; j <= a.length; j++) {
+                    if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                        matrix[i][j] = matrix[i - 1][j - 1];
+                    } else {
+                        matrix[i][j] = Math.min(
+                            matrix[i - 1][j - 1] + 1, // substitution
+                            Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1) // insertion & deletion
+                        );
+                    }
+                }
+            }
+            return matrix[b.length][a.length];
+        }
+
+        // Helper: בדיקת התאמה עם סובלנות לשגיאות (Fuzzy Match)
+        function isFuzzyMatch(input, target) {
+            input = input.trim();
+            target = target.trim();
+            if (input === target) return true;
+            const dist = levenshteinDistance(input, target);
+            // אם המילה קצרה (עד 3 אותיות) - אין סלחנות לשגיאות כתיב (כדי לא לאפשר "כלב" לתשובת "כלוב").
+            // אם 4-5 אותיות - שגיאה אחת מותרת. מעל זה - 2 שגיאות.
+            const maxDist = target.length <= 3 ? 0 : (target.length <= 5 ? 1 : 2);
+            return dist <= maxDist;
+        }
+
         // פונקציה משופרת ומאובטחת לייצור תשובות שגויות למבחן אמריקאי
         function generateWrongOptions(correctStr, generatorFunc) {
             let opts = [correctStr];
@@ -1053,7 +1087,25 @@
             e.preventDefault(); 
             if (state.dict.showAnswer) return; 
             const input = document.getElementById('typing-answer').value.trim(); 
-            const isCorrect = input === state.dict.practiceQueue[state.dict.currentPracticeIndex].meaning;
+            const fullMeaning = state.dict.practiceQueue[state.dict.currentPracticeIndex].meaning;
+            
+            // פיצול המילים שהוזנו במילון וגם את מה שהמשתמש הזין בפסיקים
+            const validMeanings = fullMeaning.split(',').map(m => m.trim()).filter(m => m !== '');
+            const userMeanings = input.split(',').map(m => m.trim()).filter(m => m !== '');
+            
+            let isCorrect = false;
+
+            // נבדוק האם לפחות פירוש אחד שהמשתמש הזין תואם לפחות לאחד מהפירושים הנכונים
+            for (const userVal of userMeanings) {
+                for (const target of validMeanings) {
+                    if (isFuzzyMatch(userVal, target)) {
+                        isCorrect = true;
+                        break;
+                    }
+                }
+                if (isCorrect) break;
+            }
+
             state.dict.lastAnswerCorrect = isCorrect;
             state.dict.showAnswer = true;
             if(isCorrect) state.dict.practiceScore++; 
@@ -1345,7 +1397,7 @@
             `}).join('');
 
             return `
-                <div class="p-6 flex items-center gap-3 text-white border-b border-zinc-900">
+                <div class="p-6 flex items-center gap-3 text-white border-b border-zinc-900 cursor-pointer hover:bg-zinc-900/50 transition-colors" onclick="switchView(state.isAdmin ? 'admin_dashboard' : 'dashboard')">
                     <div class="bg-zinc-100 p-2 rounded-lg"><i data-lucide="graduation-cap" class="w-5 h-5 text-zinc-900"></i></div>
                     <span class="text-xl font-extrabold tracking-tight hidden md:block">Psycho<span class="font-light">Master</span></span>
                 </div>
@@ -1938,12 +1990,13 @@
                     <div class="mb-8"><h2 class="text-3xl font-bold text-zinc-900 mb-1">${title}</h2><p class="text-zinc-500">הכנס מילים שנתקעת בהן ובחן את עצמך.</p></div>
                     <div class="grid md:grid-cols-3 gap-8">
                         <div class="md:col-span-2 bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
-                            <form onsubmit="addDictWord(event)" class="mb-6 flex gap-2">
+                            <form onsubmit="addDictWord(event)" class="mb-2 flex gap-2">
                                 <input type="hidden" id="dict-lang" value="${lang}">
                                 <input type="text" id="dict-word" placeholder="${lang==='he'?'מילה בעברית':'Word in English'}" required class="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:border-zinc-900" dir="${lang==='en'?'ltr':'rtl'}">
-                                <input type="text" id="dict-meaning" placeholder="פירוש בעברית" required class="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:border-zinc-900">
+                                <input type="text" id="dict-meaning" placeholder="פירוש (למספר פירושים הפרד בפסיק ',')" required class="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:border-zinc-900">
                                 <button type="submit" class="px-5 py-2 bg-zinc-900 text-white rounded-xl font-bold flex-shrink-0 hover:bg-zinc-800 transition"><i data-lucide="plus" class="w-5 h-5"></i></button>
                             </form>
+                            <p class="text-xs text-zinc-500 mb-6 font-medium">💡 <span class="font-bold">טיפ:</span> אם למילה יש מספר פירושים, ניתן להפריד אותם בפסיק (לדוגמה: יפה, נאה, מקסים). מספיק לכתוב אחד מהם בתרגול ההקלדה, והמערכת מאפשרת גם שגיאות כתיב קלות!</p>
                             <div class="space-y-2 max-h-[400px] overflow-y-auto">${wordsHTML}</div>
                         </div>
                         <div class="bg-zinc-900 rounded-2xl p-6 text-white text-center border border-zinc-800 shadow-xl self-start">
@@ -2053,8 +2106,14 @@
 
             let resultMessage = '';
             if (state.dict.showAnswer && state.dict.practiceMode !== 'flashcards') {
-                if (state.dict.lastAnswerCorrect) resultMessage = `<div class="text-green-600 font-bold text-xl flex justify-center gap-2 mb-6"><i data-lucide="check-circle"></i> מדויק!</div>`;
-                else resultMessage = `<div class="text-red-500 font-bold flex flex-col items-center gap-2 mb-6"><div><i data-lucide="x-circle" class="w-6 h-6 inline"></i> טעות.</div><div class="text-zinc-600 font-medium">נכון: <span class="text-zinc-900 bg-zinc-100 px-2 py-1 rounded">${wordObj.meaning}</span></div></div>`;
+                if (state.dict.lastAnswerCorrect) {
+                    resultMessage = `<div class="text-green-600 font-bold text-xl flex justify-center gap-2 ${wordObj.meaning.includes(',') ? 'mb-2' : 'mb-6'}"><i data-lucide="check-circle"></i> מדויק!</div>`;
+                    if (state.dict.practiceMode === 'typing' && wordObj.meaning.includes(',')) {
+                        resultMessage += `<div class="text-zinc-600 text-sm mb-6 font-medium">הפירושים המלאים: <span class="text-zinc-900 bg-green-50 border border-green-200 px-2 py-1 rounded">${wordObj.meaning}</span></div>`;
+                    }
+                } else {
+                    resultMessage = `<div class="text-red-500 font-bold flex flex-col items-center gap-2 mb-6"><div><i data-lucide="x-circle" class="w-6 h-6 inline"></i> טעות.</div><div class="text-zinc-600 font-medium">נכון: <span class="text-zinc-900 bg-zinc-100 px-2 py-1 rounded">${wordObj.meaning}</span></div></div>`;
+                }
             }
 
             return `
