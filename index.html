@@ -966,26 +966,57 @@
         };
 
         window.addDictWord = (e) => {
-            e.preventDefault(); const word = document.getElementById('dict-word').value.trim(); const meaning = document.getElementById('dict-meaning').value.trim(); const lang = document.getElementById('dict-lang').value;
-            if (word && meaning) { const updatedProfile = { ...state.profile }; updatedProfile.customDictionary.words.unshift({ id: Date.now(), word, meaning, lang }); saveProfile(updatedProfile); render(); }
+            e.preventDefault(); 
+            const word = document.getElementById('dict-word').value.trim(); 
+            const meaning = document.getElementById('dict-meaning').value.trim(); 
+            const lang = document.getElementById('dict-lang').value;
+            if (word && meaning) { 
+                const updatedProfile = { ...state.profile }; 
+                if(!updatedProfile.customDictionary) updatedProfile.customDictionary = {words:[], images:[]};
+                if(!updatedProfile.customDictionary.words) updatedProfile.customDictionary.words = [];
+                updatedProfile.customDictionary.words.unshift({ id: Date.now(), word, meaning, lang }); 
+                saveProfile(updatedProfile); render(); 
+            }
         };
         window.deleteDictWord = (id) => { const updatedProfile = { ...state.profile }; updatedProfile.customDictionary.words = updatedProfile.customDictionary.words.filter(w => w.id !== id); saveProfile(updatedProfile); render(); };
         
-        window.addDictImage = (e) => { const file = e.target.files[0]; if(file) { window.resizeImage(file, (base64) => { const updatedProfile = { ...state.profile }; updatedProfile.customDictionary.images.unshift({ id: Date.now(), imageBase64: base64, note: '' }); saveProfile(updatedProfile); render(); }); } };
+        window.addDictImage = (e) => { 
+            const file = e.target.files[0]; 
+            if(file) { 
+                window.resizeImage(file, (base64) => { 
+                    const updatedProfile = { ...state.profile }; 
+                    if(!updatedProfile.customDictionary) updatedProfile.customDictionary = {words:[], images:[]};
+                    if(!updatedProfile.customDictionary.images) updatedProfile.customDictionary.images = [];
+                    updatedProfile.customDictionary.images.unshift({ id: Date.now(), imageBase64: base64, note: '' }); 
+                    saveProfile(updatedProfile); render(); 
+                }); 
+            } 
+        };
         window.deleteDictImage = (id) => { const updatedProfile = { ...state.profile }; updatedProfile.customDictionary.images = updatedProfile.customDictionary.images.filter(img => img.id !== id); saveProfile(updatedProfile); render(); };
         window.openImagePreview = (src) => { const w = window.open(""); w.document.write(`<img src="${src}" style="max-width: 100%; max-height: 100vh; display: block; margin: 0 auto;">`); };
 
-        window.startDictPractice = (mode, lang) => {
+        window.startDictPracticeWithLimit = (mode, lang) => {
+            const limitVal = document.getElementById('dict-practice-limit').value;
+            let limit = limitVal === 'all' ? null : parseInt(limitVal);
+            startDictPractice(mode, lang, limit);
+        };
+
+        window.startDictPractice = (mode, lang, limit = null) => {
             const allWords = state.profile.customDictionary.words || [];
             const words = allWords.filter(w => w.lang === lang);
             
             if (mode === 'american' && words.length < 4) return showAlert('שגיאה', 'יש להזין לפחות 4 מילים במילון לתרגול אמריקאי.', 'alert-triangle');
             if (words.length === 0) return showAlert('שגיאה', 'המילון ריק.', 'alert-triangle');
             
+            let queue = shuffleArray([...words]);
+            if (limit && limit > 0 && limit < queue.length) {
+                queue = queue.slice(0, limit);
+            }
+
             state.dict = { 
                 practiceMode: mode, practiceLang: lang, 
-                practiceQueue: shuffleArray([...words]), 
-                totalWordsInPractice: words.length,
+                practiceQueue: queue, 
+                totalWordsInPractice: queue.length,
                 currentPracticeIndex: 0, practiceScore: 0, showAnswer: false, isFlipped: false 
             }; 
             switchView('dict_practice');
@@ -1010,23 +1041,47 @@
         };
 
         window.checkAmericanAnswer = (selectedMeaning) => {
-            if (state.dict.showAnswer) return; const isCorrect = selectedMeaning === state.dict.practiceQueue[state.dict.currentPracticeIndex].meaning;
-            if(isCorrect) state.dict.practiceScore++; state.dict.showAnswer = true; state.dict.lastAnswerCorrect = isCorrect; render();
+            if (state.dict.showAnswer) return; 
+            const isCorrect = selectedMeaning === state.dict.practiceQueue[state.dict.currentPracticeIndex].meaning;
+            state.dict.lastAnswerCorrect = isCorrect;
+            state.dict.showAnswer = true;
+            if(isCorrect) state.dict.practiceScore++; 
+            render();
         };
+        
         window.checkTypingAnswer = (e) => {
-            e.preventDefault(); if (state.dict.showAnswer) return; const input = document.getElementById('typing-answer').value.trim(); const isCorrect = input === state.dict.practiceQueue[state.dict.currentPracticeIndex].meaning;
-            if(isCorrect) state.dict.practiceScore++; state.dict.showAnswer = true; state.dict.lastAnswerCorrect = isCorrect; render();
+            e.preventDefault(); 
+            if (state.dict.showAnswer) return; 
+            const input = document.getElementById('typing-answer').value.trim(); 
+            const isCorrect = input === state.dict.practiceQueue[state.dict.currentPracticeIndex].meaning;
+            state.dict.lastAnswerCorrect = isCorrect;
+            state.dict.showAnswer = true;
+            if(isCorrect) state.dict.practiceScore++; 
+            render();
         };
+
         window.nextPracticeWord = () => { 
-            state.dict.practiceQueue.splice(state.dict.currentPracticeIndex, 1);
+            // רק אם צדקנו, מסירים את המילה מהתור. אם טעינו, היא פשוט נדחפת חזרה לסבב הבא
+            if (state.dict.lastAnswerCorrect) {
+                state.dict.practiceQueue.splice(state.dict.currentPracticeIndex, 1);
+            } else {
+                state.dict.currentPracticeIndex++;
+            }
+            
             state.dict.showAnswer = false; 
-            if(state.dict.practiceQueue.length === 0) finishDictPractice();
-            else render(); 
+            
+            if(state.dict.practiceQueue.length === 0) {
+                finishDictPractice();
+            } else {
+                if(state.dict.currentPracticeIndex >= state.dict.practiceQueue.length) state.dict.currentPracticeIndex = 0;
+                render(); 
+            }
         };
+
         window.finishDictPractice = () => { 
             let msg = state.dict.practiceMode === 'flashcards' ? 'סיימת לעבור על כל הכרטיסיות!' : `ענית נכונה על ${state.dict.practiceScore} מתוך ${state.dict.totalWordsInPractice} מילים.`;
             showAlert('סיום תרגול', msg, 'award'); 
-            switchView(`dict_${state.dict.practiceLang}`); 
+            switchView(state.dict.practiceLang === 'he' ? 'dict_hebrew' : 'dict_english'); 
         };
 
         // ==============================================================
@@ -1062,6 +1117,8 @@
         };
 
         window.nextQuantQuestion = () => {
+            state.quantState.isTransitioning = false;
+
             if (state.quantState.currentIndex < state.quantState.history.length - 1) {
                 state.quantState.currentIndex++;
             } else {
@@ -1083,13 +1140,14 @@
                 state.quantState.history.push({ ...newQ, userAnswer: null, isCorrect: null });
                 state.quantState.currentIndex = state.quantState.history.length - 1;
             }
-            state.quantState.isTransitioning = false;
+            
             if(state.view !== 'quant_active_practice') switchView('quant_active_practice');
             else render();
         };
 
         window.prevQuantQuestion = () => {
             if (state.quantState.currentIndex > 0) {
+                state.quantState.isTransitioning = false;
                 state.quantState.currentIndex--;
                 render();
             }
@@ -1131,7 +1189,7 @@
                 switchView('quant_basics');
                 return;
             }
-            showAlert('סיום תרגול', `ענית נכונה על ${state.quantState.score} מתוך ${answeredCount} שאלות בנושא ${state.quantState.topicObj.title}.<br><br>⏱️ זמן תרגול כולל: <b>${formatTimeObj(totalSec)}</b>`, 'award');
+            showAlert('סיום תרגול', `תרגלת ${answeredCount} שאלות בנושא ${state.quantState.topicObj.title}.<br>ענית נכונה על ${state.quantState.score} מתוכן!<br><br>⏱️ זמן תרגול כולל: <b>${formatTimeObj(totalSec)}</b>`, 'award');
             switchView('quant_basics');
         };
 
@@ -1532,7 +1590,7 @@
                                     <div><label class="block text-xs font-bold text-zinc-500 mb-1">התחלה</label><input type="time" id="class-start-time" required class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-3 text-sm font-mono focus:border-zinc-500"></div>
                                     <div><label class="block text-xs font-bold text-zinc-500 mb-1">סיום</label><input type="time" id="class-end-time" required class="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-3 text-sm font-mono focus:border-zinc-500"></div>
                                 </div>
-                                <div class="bg-zinc-50 p-4 rounded-xl border border-zinc-100 flex justify-between"><span class="text-sm font-bold">בזום?</span><div class="switch"><input type="checkbox" id="class-zoom"><span class="slider-toggle"></span></div></div>
+                                <div class="bg-zinc-50 p-4 rounded-xl border border-zinc-100 flex justify-between items-center"><span class="text-sm font-bold">בזום?</span><label class="switch cursor-pointer"><input type="checkbox" id="class-zoom"><span class="slider-toggle"></span></label></div>
                                 <div class="flex gap-2"><button type="submit" id="class-form-btn" class="flex-1 py-3 bg-zinc-900 text-white rounded-xl font-bold">${state.editingClassId ? 'שמור' : 'הוסף'}</button>${state.editingClassId ? `<button type="button" onclick="cancelEditClass()" class="px-4 bg-zinc-100 text-zinc-700 rounded-xl font-bold">בטל</button>` : ''}</div>
                             </form>
                         </div></div>
@@ -1853,7 +1911,7 @@
                     
                     <div class="flex justify-between items-center mt-6 pt-4">
                         <button onclick="prevQuantQuestion()" class="px-5 py-3 bg-white border border-zinc-200 text-zinc-600 rounded-xl font-bold hover:bg-zinc-50 hover:text-zinc-900 flex gap-2 transition disabled:opacity-30 disabled:pointer-events-none shadow-sm" ${state.quantState.currentIndex === 0 ? 'disabled' : ''}><i data-lucide="arrow-right" class="w-5 h-5"></i> קודמת</button>
-                        ${state.quantState.currentIndex < state.quantState.history.length - 1 ? 
+                        ${(state.quantState.currentIndex < state.quantState.history.length - 1) || isAnswered ? 
                             `<button onclick="nextQuantQuestion()" class="px-5 py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-800 flex gap-2 transition shadow-md">הבאה <i data-lucide="arrow-left" class="w-5 h-5"></i></button>` : 
                             `<div></div>`
                         }
@@ -1884,18 +1942,29 @@
                                 <input type="hidden" id="dict-lang" value="${lang}">
                                 <input type="text" id="dict-word" placeholder="${lang==='he'?'מילה בעברית':'Word in English'}" required class="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:border-zinc-900" dir="${lang==='en'?'ltr':'rtl'}">
                                 <input type="text" id="dict-meaning" placeholder="פירוש בעברית" required class="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-sm focus:border-zinc-900">
-                                <button type="submit" class="px-4 py-2 bg-zinc-900 text-white rounded-xl font-bold"><i data-lucide="plus" class="w-5 h-5"></i></button>
+                                <button type="submit" class="px-5 py-2 bg-zinc-900 text-white rounded-xl font-bold flex-shrink-0 hover:bg-zinc-800 transition"><i data-lucide="plus" class="w-5 h-5"></i></button>
                             </form>
                             <div class="space-y-2 max-h-[400px] overflow-y-auto">${wordsHTML}</div>
                         </div>
                         <div class="bg-zinc-900 rounded-2xl p-6 text-white text-center border border-zinc-800 shadow-xl self-start">
                             <i data-lucide="brain" class="w-12 h-12 mx-auto mb-4 text-zinc-400"></i>
                             <h3 class="text-xl font-bold mb-2">מרכז בחינה</h3>
-                            <p class="text-sm text-zinc-400 mb-6">יש לך ${words.length} מילים ב${lang==='he'?'עברית':'אנגלית'}. בחר מצב בחינה:</p>
+                            <p class="text-sm text-zinc-400 mb-4">יש לך ${words.length} מילים ב${lang==='he'?'עברית':'אנגלית'}.</p>
+                            
+                            <div class="mb-4 text-right">
+                                <label class="block text-xs font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">כמות מילים לתרגול:</label>
+                                <select id="dict-practice-limit" class="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-500 font-medium">
+                                    <option value="all">כל המאגר (אקראי)</option>
+                                    <option value="7">מקבץ ממוקד (7 מילים)</option>
+                                    <option value="15">מקבץ בינוני (15 מילים)</option>
+                                    <option value="30">מקבץ ארוך (30 מילים)</option>
+                                </select>
+                            </div>
+
                             <div class="space-y-3">
-                                <button onclick="startDictPractice('flashcards', '${lang}')" class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 flex justify-center gap-2 shadow-md"><i data-lucide="layers"></i> כרטיסיות חכמות</button>
-                                <button onclick="startDictPractice('american', '${lang}')" class="w-full py-3 bg-white text-zinc-900 rounded-xl font-bold hover:bg-zinc-100 flex justify-center gap-2"><i data-lucide="list"></i> אמריקאי</button>
-                                <button onclick="startDictPractice('typing', '${lang}')" class="w-full py-3 bg-zinc-800 text-white border border-zinc-700 rounded-xl font-bold hover:bg-zinc-700 flex justify-center gap-2"><i data-lucide="keyboard"></i> הקלדה</button>
+                                <button onclick="startDictPracticeWithLimit('flashcards', '${lang}')" class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 flex justify-center gap-2 shadow-md"><i data-lucide="layers"></i> כרטיסיות חכמות</button>
+                                <button onclick="startDictPracticeWithLimit('american', '${lang}')" class="w-full py-3 bg-white text-zinc-900 rounded-xl font-bold hover:bg-zinc-100 flex justify-center gap-2"><i data-lucide="list"></i> אמריקאי</button>
+                                <button onclick="startDictPracticeWithLimit('typing', '${lang}')" class="w-full py-3 bg-zinc-800 text-white border border-zinc-700 rounded-xl font-bold hover:bg-zinc-700 flex justify-center gap-2"><i data-lucide="keyboard"></i> הקלדה</button>
                             </div>
                         </div>
                     </div>
@@ -1991,7 +2060,7 @@
             return `
                 <div class="max-w-2xl mx-auto animate-in fade-in duration-500 text-center">
                     <div class="flex justify-between items-center mb-8 border-b border-zinc-200 pb-4">
-                        <button onclick="switchView('dict_${state.dict.practiceLang}')" class="text-zinc-500 flex gap-1 hover:text-zinc-900"><i data-lucide="arrow-right" class="w-5 h-5"></i> סיום תרגול</button>
+                        <button onclick="finishDictPractice()" class="text-zinc-500 flex gap-1 hover:text-zinc-900"><i data-lucide="arrow-right" class="w-5 h-5"></i> סיום תרגול</button>
                         <div class="font-mono text-sm bg-white px-4 py-1.5 rounded-full border border-zinc-200 font-bold text-zinc-700">
                             ${state.dict.practiceMode === 'flashcards' ? `נשארו ללימוד: ${wordsLeft}` : `${current} / ${total}`}
                         </div>
@@ -2001,7 +2070,7 @@
                         <div class="space-y-4 mx-auto ${state.dict.practiceMode === 'flashcards' ? 'max-w-md' : 'max-w-sm'}">${practiceContent}</div>
                         <div class="mt-8 min-h-[80px]">
                             ${resultMessage}
-                            ${state.dict.showAnswer && state.dict.practiceMode !== 'flashcards' ? (wordsLeft > 1 ? `<button onclick="nextPracticeWord()" class="px-8 py-3 bg-zinc-900 text-white rounded-xl font-bold mx-auto flex gap-2 shadow-md">הבא <i data-lucide="arrow-left" class="w-5 h-5"></i></button>` : `<button onclick="finishDictPractice()" class="px-8 py-3 bg-zinc-900 text-white rounded-xl font-bold mx-auto shadow-md">סיום תרגול</button>`) : ''}
+                            ${state.dict.showAnswer && state.dict.practiceMode !== 'flashcards' ? `<button onclick="nextPracticeWord()" class="px-8 py-3 bg-zinc-900 text-white rounded-xl font-bold mx-auto flex gap-2 shadow-md">המשך <i data-lucide="arrow-left" class="w-5 h-5"></i></button>` : ''}
                         </div>
                     </div>
                 </div>
